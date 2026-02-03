@@ -1,103 +1,71 @@
-if (!window.pdfConverterInjected) {
-  window.pdfConverterInjected = true;
+if (!window.textExtractorInjected) {
+  window.textExtractorInjected = true;
 
   chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-    if (request.type === 'pdf') {
-      generatePDF(request.scope);
-    } else if (request.type === 'md') {
-      generateMD(request.scope);
+    // Ensure Extractor is loaded
+    if (!window.TextExtractor) {
+        console.error("TextExtractor not loaded");
+        return;
+    }
+
+    const text = window.TextExtractor.extract(document, request.scope);
+
+    if (request.action === 'extract') {
+        downloadText(text);
+    } else if (request.action === 'print') {
+        printText(text);
     }
   });
 
-  async function generatePDF(scope) {
-    const { jsPDF } = window.jspdf;
-
-    let element;
-    let isTemp = false;
-
-    if (scope === 'selection') {
-      const selection = window.getSelection();
-      if (selection.rangeCount > 0) {
-        const range = selection.getRangeAt(0);
-        element = document.createElement('div');
-        // Copy styles might be needed for better accuracy, but complex.
-        // We wrap it in a div and append it to body to render it.
-        element.style.position = 'absolute';
-        element.style.left = '-9999px';
-        element.style.top = '0';
-        element.style.width = '1000px'; // Force a width for rendering
-        element.style.backgroundColor = 'white';
-        element.appendChild(range.cloneContents());
-        document.body.appendChild(element);
-        isTemp = true;
-      } else {
-        alert('No selection found');
+  function downloadText(text) {
+    if (!text) {
+        alert("No text extracted.");
         return;
-      }
-    } else {
-      element = document.body;
     }
+    const blob = new Blob([text], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `extracted_text_${Date.now()}.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
 
-    try {
-      const canvas = await html2canvas(element, {
-        useCORS: true,
-        logging: false
-      });
-      const imgData = canvas.toDataURL('image/png');
-
-      const imgWidth = canvas.width;
-      const imgHeight = canvas.height;
-      const pdfWidth = 210; // A4 width in mm
-      const pdfHeight = (imgHeight * pdfWidth) / imgWidth;
-
-      const doc = new jsPDF({
-        orientation: pdfHeight > pdfWidth ? 'p' : 'l',
-        unit: 'mm',
-        format: [pdfWidth, pdfHeight]
-      });
-
-      doc.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
-      doc.save(`document_${Date.now()}.pdf`);
-    } catch (e) {
-      console.error(e);
-      alert('PDF generation failed');
-    } finally {
-      if (isTemp && element) {
-        document.body.removeChild(element);
-      }
+  function printText(text) {
+    if (!text) {
+        alert("No text extracted.");
+        return;
+    }
+    // Open a new window for printing
+    const printWindow = window.open('', '_blank');
+    if (printWindow) {
+        printWindow.document.write(`
+            <html>
+            <head>
+                <title>Print Text</title>
+                <style>
+                    body { font-family: monospace; white-space: pre-wrap; padding: 20px; }
+                </style>
+            </head>
+            <body>${escapeHtml(text)}</body>
+            </html>
+        `);
+        printWindow.document.close();
+        printWindow.focus();
+        setTimeout(() => { // Give time for rendering
+            printWindow.print();
+        }, 500);
+    } else {
+        alert("Popup blocked. Allow popups to print.");
     }
   }
 
-  function generateMD(scope) {
-    const turndownService = new TurndownService();
-    let html = '';
-
-    if (scope === 'selection') {
-      const selection = window.getSelection();
-      if (selection.rangeCount > 0) {
-        const div = document.createElement('div');
-        div.appendChild(selection.getRangeAt(0).cloneContents());
-        html = div.innerHTML;
-      } else {
-        alert('No selection found');
-        return;
-      }
-    } else {
-      html = document.body.innerHTML;
-    }
-
-    try {
-      const markdown = turndownService.turndown(html);
-      const blob = new Blob([markdown], { type: 'text/markdown' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `document_${Date.now()}.md`;
-      a.click();
-      URL.revokeObjectURL(url);
-    } catch (e) {
-      console.error(e);
-      alert('Markdown generation failed');
-    }
+  function escapeHtml(text) {
+    return text
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
   }
 }
