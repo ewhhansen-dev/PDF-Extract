@@ -1,14 +1,14 @@
 {
   "manifest_version": 3,
-  "name": "Webpage to PDF/MD Converter",
-  "version": "1.0",
-  "description": "Convert webpage or selection to PDF or Markdown.",
+  "name": "Privacy-First Text Extractor",
+  "version": "1.1",
+  "description": "Extract plain text from webpages or selections locally. No external APIs.",
   "permissions": [
     "activeTab",
     "scripting"
   ],
   "action": {
     "default_popup": "popup.html",
-    "default_title": "Convert Page"
+    "default_title": "Extract Text"
   }
 }

@@ -1,11 +1,12 @@
-# Webpage to PDF/MD Converter
+# Privacy-First Text Extractor
 
-A browser extension to convert webpage content or selected text into PDF or Markdown files.
+A browser extension to extract plain text from webpage content or selected text, with a focus on privacy and clean output.
 
 ## Features
-- Convert full page or selected text to PDF.
-- Convert full page or selected text to Markdown.
-- User-controlled: No external API calls, everything runs locally in the browser.
+- **Extract Text**: Convert full page or selected text to a clean `.txt` file.
+- **Privacy First**: 100% user-controlled. No external API calls, no third-party libraries, everything runs locally.
+- **Clean Output**: Intelligently removes ads, scripts, and noise. Preserves structure (headings, lists).
+- **Print to PDF**: Use the browser's native print functionality to save extracted text as PDF.
 
 ## Installation
 
@@ -18,18 +19,14 @@ A browser extension to convert webpage content or selected text into PDF or Mark
 
 ## Usage
 1. Click the extension icon in the toolbar.
-2. Choose "Save Page" or "Save Selection" under PDF or Markdown.
-3. The file will download automatically.
+2. Choose:
+   - **Extract Page Text**: Downloads the main article content as a text file.
+   - **Extract Selection Text**: Downloads the currently selected text.
+   - **Print Text as PDF**: Opens a clean view of the text for printing/saving as PDF.
 
 ## Development
-- Dependencies are managed via `npm`.
-- Libraries used:
-  - [jsPDF](https://github.com/parallax/jsPDF)
-  - [html2canvas](https://html2canvas.hertzen.com/)
-  - [Turndown](https://github.com/mixmark-io/turndown)
-
-To update dependencies:
-```bash
-npm install
-# Then copy the dist files to extension/lib/ as needed
-```
+- **No Dependencies**: Pure JavaScript, HTML, and CSS.
+- **Architecture**:
+  - `manifest.json`: Manifest V3 configuration.
+  - `popup.html/js`: UI and interaction logic.
+  - `content.js`: Core extraction engine (DOM cleaning, serialization) and export handling.
