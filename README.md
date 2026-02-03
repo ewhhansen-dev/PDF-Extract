@@ -7,6 +7,7 @@ A browser extension to convert webpage content or selected text into plain text 
 - Print extracted text using the browser's native PDF printer.
 - User-controlled: No external API calls, everything runs locally in the browser.
 - Plain-text extraction only (no embedded markup or encodings in TXT).
+- Non-text elements (e.g., canvas, images, iframes) are represented as plain-text placeholders.
 
 ## Installation
 

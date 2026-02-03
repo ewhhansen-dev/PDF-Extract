@@ -211,20 +211,22 @@ if (!window.pdfConverterInjected) {
         ensureBlankLine();
         const width = node.width || node.clientWidth || 0;
         const height = node.height || node.clientHeight || 0;
-        addLine(`[Canvas content: ${width}x${height}]`);
+        const label = getNodeLabel(node);
+        addLine(`[Canvas content: ${width}x${height}${label ? ` - ${label}` : ''}]`);
         ensureBlankLine();
         return;
       }
 
       if (tag === 'IFRAME') {
         ensureBlankLine();
-        addLine('[Embedded content: iframe]');
+        const label = getNodeLabel(node);
+        addLine(`[Embedded content: iframe${label ? ` - ${label}` : ''}]`);
         ensureBlankLine();
         return;
       }
 
       if (tag === 'IMG') {
-        const alt = node.getAttribute('alt');
+        const alt = getNodeLabel(node) || node.getAttribute('alt');
         ensureBlankLine();
         addLine(alt ? `[Image: ${alt}]` : '[Image]');
         ensureBlankLine();
@@ -283,6 +285,27 @@ if (!window.pdfConverterInjected) {
       .join('\n')
       .replace(/\n{3,}/g, '\n\n')
       .trim();
+  }
+
+  function getNodeLabel(node) {
+    if (!node || node.nodeType !== Node.ELEMENT_NODE) {
+      return '';
+    }
+    const label = node.getAttribute('aria-label') || node.getAttribute('title');
+    if (label) {
+      return label.trim();
+    }
+    const labelledBy = node.getAttribute('aria-labelledby');
+    if (labelledBy) {
+      const referenced = labelledBy
+        .split(/\s+/)
+        .map((id) => document.getElementById(id))
+        .filter(Boolean)
+        .map((el) => el.textContent.trim())
+        .find((text) => text.length > 0);
+      return referenced || '';
+    }
+    return '';
   }
 
   function escapeHtml(text) {
