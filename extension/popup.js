@@ -1,9 +1,9 @@
 document.addEventListener('DOMContentLoaded', () => {
   const buttons = {
+    'txt-page': { type: 'txt', scope: 'page' },
+    'txt-selection': { type: 'txt', scope: 'selection' },
     'pdf-page': { type: 'pdf', scope: 'page' },
-    'pdf-selection': { type: 'pdf', scope: 'selection' },
-    'md-page': { type: 'md', scope: 'page' },
-    'md-selection': { type: 'md', scope: 'selection' }
+    'pdf-selection': { type: 'pdf', scope: 'selection' }
   };
 
   const status = document.getElementById('status');
@@ -16,12 +16,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         await chrome.scripting.executeScript({
           target: { tabId: tab.id },
-          files: [
-            'lib/jspdf.umd.min.js',
-            'lib/html2canvas.min.js',
-            'lib/turndown.js',
-            'content.js'
-          ]
+          files: ['content.js']
         });
 
         await chrome.tabs.sendMessage(tab.id, action);
