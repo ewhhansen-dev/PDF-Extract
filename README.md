@@ -1,13 +1,12 @@
-# Webpage Text Converter
+# Webpage to PDF/MD Converter
 
-A browser extension to convert webpage content or selected text into plain text files, with optional print-to-PDF.
+A browser extension to convert webpage content or selected text into PDF or Markdown files.
 
 ## Features
-- Convert full page or selected text to plain TXT.
-- Print extracted text using the browser's native PDF printer.
+- Convert full page or selected text to PDF.
+- Convert full page or selected text to Markdown.
+- Convert full page or selected text to Plain Text (.txt).
 - User-controlled: No external API calls, everything runs locally in the browser.
-- Plain-text extraction only (no embedded markup or encodings in TXT).
-- Non-text elements (e.g., canvas, images, iframes) are represented as plain-text placeholders.
 
 ## Installation
 
@@ -20,8 +19,18 @@ A browser extension to convert webpage content or selected text into plain text 
 
 ## Usage
 1. Click the extension icon in the toolbar.
-2. Choose "Save Page Text" or "Save Selection Text" for TXT export, or "Print Page Text" / "Print Selection Text" for PDF printing.
-3. TXT downloads automatically; PDF printing uses the browser's print dialog.
+2. Choose "Save Page" or "Save Selection" under PDF or Markdown.
+3. The file will download automatically.
 
 ## Development
-- No third-party libraries are used.
+- Dependencies are managed via `npm`.
+- Libraries used:
+  - [jsPDF](https://github.com/parallax/jsPDF)
+  - [html2canvas](https://html2canvas.hertzen.com/)
+  - [Turndown](https://github.com/mixmark-io/turndown)
+
+To update dependencies:
+```bash
+npm install
+# Then copy the dist files to extension/lib/ as needed
+```
