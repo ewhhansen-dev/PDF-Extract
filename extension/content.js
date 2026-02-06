@@ -41,7 +41,12 @@ async function handleConversion(format, scope) {
   } else {
     element = document.body;
     htmlContent = document.body.innerHTML;
-    textContent = document.body.innerText;
+    // Clone body to safely manipulate for text extraction without affecting display
+    const clone = document.body.cloneNode(true);
+    // Remove scripts and styles to ensure pure text
+    const scripts = clone.querySelectorAll('script, style, noscript');
+    scripts.forEach(node => node.remove());
+    textContent = clone.innerText;
   }
 
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-');

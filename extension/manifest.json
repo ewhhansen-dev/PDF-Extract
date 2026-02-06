@@ -1,0 +1,14 @@
+{
+  "manifest_version": 3,
+  "name": "Webpage to PDF/MD Converter",
+  "version": "1.0",
+  "description": "Convert webpage or selected area to PDF, Markdown or Plain Text.",
+  "permissions": [
+    "activeTab",
+    "scripting"
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Convert Page"
+  }
+}
