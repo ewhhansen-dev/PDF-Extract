@@ -6,14 +6,23 @@
 </head>
 <body>
   <h3>Convert Page</h3>
+
   <div class="button-group">
-    <button id="pdf-page">Save Page as PDF</button>
-    <button id="pdf-selection">Save Selection as PDF</button>
+    <h4>Pure Text (Typewriter)</h4>
+    <button id="pdf-typewriter-page">Save Page as Typewriter PDF</button>
+    <button id="txt-page">Save Page as Plain Text</button>
+    <button id="pdf-typewriter-selection">Save Selection as Typewriter PDF</button>
+    <button id="txt-selection">Save Selection as Plain Text</button>
   </div>
+
   <div class="button-group">
+    <h4>Standard (Images/Markdown)</h4>
+    <button id="pdf-page">Save Page as Screenshot PDF</button>
+    <button id="pdf-selection">Save Selection as Screenshot PDF</button>
     <button id="md-page">Save Page as Markdown</button>
     <button id="md-selection">Save Selection as Markdown</button>
   </div>
+
   <script src="popup.js"></script>
 </body>
 </html>

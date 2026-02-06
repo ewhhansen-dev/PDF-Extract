@@ -1,3 +1,19 @@
+document.getElementById('pdf-typewriter-page').addEventListener('click', () => {
+  injectAndRun('pdf-typewriter', 'page');
+});
+
+document.getElementById('txt-page').addEventListener('click', () => {
+  injectAndRun('txt', 'page');
+});
+
+document.getElementById('pdf-typewriter-selection').addEventListener('click', () => {
+  injectAndRun('pdf-typewriter', 'selection');
+});
+
+document.getElementById('txt-selection').addEventListener('click', () => {
+  injectAndRun('txt', 'selection');
+});
+
 document.getElementById('pdf-page').addEventListener('click', () => {
   injectAndRun('pdf', 'page');
 });
