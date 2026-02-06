@@ -5,6 +5,7 @@ A browser extension to convert webpage content or selected text into PDF or Mark
 ## Features
 - Convert full page or selected text to PDF.
 - Convert full page or selected text to Markdown.
+- Convert full page or selected text to Plain Text (.txt).
 - User-controlled: No external API calls, everything runs locally in the browser.
 
 ## Installation

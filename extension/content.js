@@ -5,6 +5,38 @@ if (!window.textExtractorInjected) {
     // Ensure Extractor is loaded
     if (!window.TextExtractor) {
         console.error("TextExtractor not loaded");
+    if (request.type === 'pdf') {
+      generatePDF(request.scope);
+    } else if (request.type === 'md') {
+      generateMD(request.scope);
+    } else if (request.type === 'text') {
+      generateText(request.scope);
+    }
+  });
+
+  async function generatePDF(scope) {
+    const { jsPDF } = window.jspdf;
+
+    let element;
+    let isTemp = false;
+
+    if (scope === 'selection') {
+      const selection = window.getSelection();
+      if (selection.rangeCount > 0) {
+        const range = selection.getRangeAt(0);
+        element = document.createElement('div');
+        // Copy styles might be needed for better accuracy, but complex.
+        // We wrap it in a div and append it to body to render it.
+        element.style.position = 'absolute';
+        element.style.left = '-9999px';
+        element.style.top = '0';
+        element.style.width = '1000px'; // Force a width for rendering
+        element.style.backgroundColor = 'white';
+        element.appendChild(range.cloneContents());
+        document.body.appendChild(element);
+        isTemp = true;
+      } else {
+        alert('No selection found');
         return;
     }
 
@@ -67,5 +99,34 @@ if (!window.textExtractorInjected) {
         .replace(/>/g, "&gt;")
         .replace(/"/g, "&quot;")
         .replace(/'/g, "&#039;");
+  }
+
+  function generateText(scope) {
+    let text = '';
+
+    if (scope === 'selection') {
+      const selection = window.getSelection();
+      if (selection.rangeCount > 0) {
+        text = selection.toString();
+      } else {
+        alert('No selection found');
+        return;
+      }
+    } else {
+      text = document.body.innerText;
+    }
+
+    try {
+      const blob = new Blob([text], { type: 'text/plain' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `document_${Date.now()}.txt`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      console.error(e);
+      alert('Text generation failed');
+    }
   }
 }
