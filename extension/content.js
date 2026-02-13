@@ -118,8 +118,10 @@ if (!window.pdfConverterInjected) {
       text = document.body.innerText;
     }
 
+    text = cleanText(text);
+
     try {
-      const blob = new Blob([text], { type: 'text/plain' });
+      const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -130,5 +132,15 @@ if (!window.pdfConverterInjected) {
       console.error(e);
       alert('Text generation failed');
     }
+  }
+
+  function cleanText(text) {
+    return text
+      .replace(/\u00A0/g, ' ') // Replace non-breaking spaces
+      .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F-\x9F]/g, '') // Remove non-printable control characters (except \t \n \r)
+      .replace(/\r\n/g, '\n') // Normalize CRLF to LF
+      .replace(/\r/g, '\n') // Normalize CR to LF
+      .replace(/\n{3,}/g, '\n\n') // Max 2 consecutive newlines
+      .trim(); // Remove leading/trailing whitespace
   }
 }
