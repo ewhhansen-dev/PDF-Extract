@@ -208,10 +208,10 @@ async function handleConversion(format, scope) {
       var turndownService = new TurndownService();
       var markdown = turndownService.turndown(htmlContent);
       var mdHeader = '<!--\n' +
-        'Title:  ' + document.title + '\n' +
-        'URL:    ' + window.location.href + '\n' +
-        'Date:   ' + new Date().toLocaleString() + '\n' +
-        'Scope:  ' + scopeLabel + '\n' +
+        'Title:  ' + sanitizeHeaderField(document.title) + '\n' +
+        'URL:    ' + sanitizeHeaderField(window.location.href) + '\n' +
+        'Date:   ' + sanitizeHeaderField(new Date().toLocaleString()) + '\n' +
+        'Scope:  ' + sanitizeHeaderField(scopeLabel) + '\n' +
         '-->\n\n';
       downloadFile(mdFilename, mdHeader + markdown, 'text/markdown;charset=utf-8');
 
@@ -265,6 +265,24 @@ function buildSmartFilename(textContent) {
 // --- INFO HEADER ---
 // Metadata block prepended to .txt and typewriter PDF exports
 
+// Sanitize a string to typewriter-safe ASCII: only printable chars survive
+function sanitizeHeaderField(str) {
+  if (!str) return '';
+  // Strip control characters (except newline/tab which we replace with space)
+  str = str.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '');
+  // Strip invisible Unicode: zero-width chars, direction overrides, BOM, etc.
+  str = str.replace(/[\u200B-\u200F\u2028-\u202F\uFEFF\u00AD\u034F\u061C\u180E\u2060-\u2064\u2066-\u206F]/g, '');
+  // Normalize common typographic chars to ASCII equivalents
+  str = str.replace(/[\u2018\u2019\u201A\u201B]/g, "'");
+  str = str.replace(/[\u201C\u201D\u201E\u201F]/g, '"');
+  str = str.replace(/[\u2013\u2014]/g, '-');
+  str = str.replace(/\u2026/g, '...');
+  str = str.replace(/[\u00A0]/g, ' ');
+  // Final filter: keep only printable ASCII (space through tilde) plus tab/newline
+  str = str.replace(/[^\x20-\x7E\t\n]/g, '');
+  return str.trim();
+}
+
 function buildInfoHeader(title, url, scopeLabel, format) {
   var formatLabels = {
     'txt': 'Plain text (.txt)',
@@ -281,13 +299,21 @@ function buildInfoHeader(title, url, scopeLabel, format) {
     hour: '2-digit', minute: '2-digit', second: '2-digit'
   });
 
+  // Sanitize all dynamic fields for typewriter purity
+  var safeTitle = sanitizeHeaderField(title);
+  var safeUrl = sanitizeHeaderField(url);
+  var safeScope = sanitizeHeaderField(scopeLabel);
+  var safeFormat = sanitizeHeaderField(formatLabels[format] || format);
+  var safeDate = sanitizeHeaderField(dateStr);
+  var safeTime = sanitizeHeaderField(timeStr);
+
   var header = '========================================\n' +
-    'Title:   ' + title + '\n' +
-    'URL:     ' + url + '\n' +
-    'Date:    ' + dateStr + '\n' +
-    'Time:    ' + timeStr + '\n' +
-    'Scope:   ' + scopeLabel + '\n' +
-    'Format:  ' + (formatLabels[format] || format) + '\n' +
+    'Title:   ' + safeTitle + '\n' +
+    'URL:     ' + safeUrl + '\n' +
+    'Date:    ' + safeDate + '\n' +
+    'Time:    ' + safeTime + '\n' +
+    'Scope:   ' + safeScope + '\n' +
+    'Format:  ' + safeFormat + '\n' +
     '========================================\n\n';
 
   return header;

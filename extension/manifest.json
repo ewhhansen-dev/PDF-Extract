@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Pure Text & PDF Extractor",
-  "version": "3.0",
+  "version": "3.1",
   "description": "Extract pure typewriter-grade text, PDF, or Markdown from any webpage, chat thread, canvas, popup, or code block. Right-click or use the toolbar icon.",
   "permissions": [
     "activeTab",
@@ -14,5 +14,28 @@
   "action": {
     "default_popup": "popup.html",
     "default_title": "Extract Content"
+  },
+  "commands": {
+    "copy-page-text": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+C",
+        "mac": "Command+Shift+C"
+      },
+      "description": "Copy purified page text to clipboard"
+    },
+    "page-to-txt": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+T",
+        "mac": "Command+Shift+T"
+      },
+      "description": "Export page as .txt file"
+    },
+    "page-to-pdf": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+E",
+        "mac": "Command+Shift+E"
+      },
+      "description": "Export page as Typewriter PDF"
+    }
   }
 }

@@ -136,30 +136,43 @@ var MENU_MAP = {
   'ctx-md-modal':       { format: 'md',             scope: 'modal' }
 };
 
-chrome.contextMenus.onClicked.addListener((info, tab) => {
-  var config = MENU_MAP[info.menuItemId];
+// --- KEYBOARD SHORTCUT HANDLER ---
+
+var COMMAND_MAP = {
+  'copy-page-text': { format: 'clipboard',      scope: 'page' },
+  'page-to-txt':    { format: 'txt',            scope: 'page' },
+  'page-to-pdf':    { format: 'pdf-typewriter', scope: 'page' }
+};
+
+chrome.commands.onCommand.addListener((command) => {
+  var config = COMMAND_MAP[command];
   if (!config) return;
 
+  chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+    if (!tabs[0]) return;
+    injectAndMessage(tabs[0], config.format, config.scope);
+  });
+});
+
+// --- SHARED INJECTION LOGIC ---
+
+function injectAndMessage(tab, format, scope) {
   var tabId = tab.id;
   var url = tab.url || '';
 
-  // Block browser-internal pages
   if (url.startsWith('brave://') || url.startsWith('chrome://') ||
       url.startsWith('edge://') || url.startsWith('about:') ||
       url.startsWith('chrome-extension://') || url.startsWith('devtools://')) {
     return;
   }
 
-  // Build file list based on format
   var files = [];
-
-  if (config.format === 'pdf-typewriter') {
+  if (format === 'pdf-typewriter') {
     files.push('lib/jspdf.umd.min.js');
   }
-  if (config.format === 'md') {
+  if (format === 'md') {
     files.push('lib/turndown.js');
   }
-
   files.push('text-extract.js');
   files.push('content.js');
 
@@ -173,8 +186,16 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
     }
     chrome.tabs.sendMessage(tabId, {
       action: 'convert',
-      format: config.format,
-      scope: config.scope
+      format: format,
+      scope: scope
     });
   });
+}
+
+// --- CONTEXT MENU CLICK HANDLER ---
+
+chrome.contextMenus.onClicked.addListener((info, tab) => {
+  var config = MENU_MAP[info.menuItemId];
+  if (!config) return;
+  injectAndMessage(tab, config.format, config.scope);
 });

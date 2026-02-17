@@ -22,7 +22,30 @@ for (const [id, config] of Object.entries(buttons)) {
   });
 }
 
+function showStatus(msg, type) {
+  var el = document.getElementById('status-msg');
+  if (!el) return;
+  el.className = 'status-' + type;
+  el.textContent = (type === 'loading' ? '\u23F3 ' : '\u2705 ') + msg;
+  el.style.display = 'block';
+}
+
+function setButtonsDisabled(disabled) {
+  var btns = document.querySelectorAll('button');
+  for (var i = 0; i < btns.length; i++) {
+    btns[i].disabled = disabled;
+  }
+}
+
 function injectAndRun(format, scope) {
+  // Show loading state immediately
+  showStatus('Processing...', 'loading');
+  setButtonsDisabled(true);
+
+  // Hide any previous errors
+  var errEl = document.getElementById('error-msg');
+  if (errEl) errEl.style.display = 'none';
+
   chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
     const tab = tabs[0];
     const tabId = tab.id;
@@ -68,12 +91,7 @@ function injectAndRun(format, scope) {
       if (chrome.runtime.lastError) {
         var errMsg = chrome.runtime.lastError.message || '';
         console.error(errMsg);
-        // Provide specific guidance for common Brave/Chrome injection failures
-        if (errMsg.includes('Cannot access') || errMsg.includes('cannot be scripted')) {
-          showError('This page is protected by the browser and cannot be extracted.');
-        } else {
-          showError('Failed to load: ' + errMsg);
-        }
+        handleInjectionError(errMsg, url);
         return;
       }
       chrome.tabs.sendMessage(tabId, {
@@ -81,12 +99,60 @@ function injectAndRun(format, scope) {
         format: format,
         scope: scope
       });
-      window.close();
+      var successLabel = format === 'clipboard' ? 'Copied!' : 'Downloaded!';
+      showStatus(successLabel, 'success');
+      setTimeout(function () { window.close(); }, 900);
     });
   });
 }
 
+function handleInjectionError(errMsg, url) {
+  setButtonsDisabled(false);
+
+  // Brave Shields blocking script injection
+  if (errMsg.includes('Cannot access') || errMsg.includes('cannot be scripted')) {
+    if (url && (url.includes('chrome.google.com') || url.includes('addons.mozilla.org'))) {
+      showError('Browser extension stores block all extensions from running scripts. Try a regular website.');
+    } else {
+      showError(
+        'This page blocked script injection. In Brave, click the lion icon ' +
+        'in the address bar and lower Shields for this site, then try again.'
+      );
+    }
+    return;
+  }
+
+  // Content Security Policy blocks
+  if (errMsg.includes('Content Security Policy') || errMsg.includes('CSP')) {
+    showError(
+      'This page has a strict Content Security Policy. In Brave, try lowering ' +
+      'Shields (lion icon in address bar) and reload the page.'
+    );
+    return;
+  }
+
+  // Frame/sandbox restrictions
+  if (errMsg.includes('frame') || errMsg.includes('sandbox')) {
+    showError(
+      'This page uses frame restrictions that block extraction. ' +
+      'Try opening the content directly in a new tab.'
+    );
+    return;
+  }
+
+  // Generic fallback with Brave-specific advice
+  showError(
+    'Extraction failed: ' + errMsg + '. If using Brave, try lowering ' +
+    'Shields for this site (lion icon in address bar).'
+  );
+}
+
 function showError(msg) {
+  // Reset loading state
+  var statusEl = document.getElementById('status-msg');
+  if (statusEl) statusEl.style.display = 'none';
+  setButtonsDisabled(false);
+
   var el = document.getElementById('error-msg');
   if (!el) {
     el = document.createElement('div');

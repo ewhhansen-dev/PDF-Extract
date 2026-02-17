@@ -817,8 +817,14 @@ test('content.js uses Blob for downloads (no data: URI encoding)', () => {
 
 test('content.js does not add BOM to txt output', () => {
   const js = fs.readFileSync(path.join(EXT, 'content.js'), 'utf8');
-  assert(!js.includes('\\uFEFF') && !js.includes('\\xEF\\xBB\\xBF'),
-    'Must NOT add BOM to txt output');
+  // BOM may appear in sanitizeHeaderField (which strips it) - check downloadFile doesn't add it
+  const dlFn = js.substring(js.indexOf('function downloadFile'));
+  assert(!dlFn.includes('\\uFEFF') && !dlFn.includes('\\xEF\\xBB\\xBF'),
+    'downloadFile must NOT add BOM to output');
+  // Also check the txt format handler doesn't prepend BOM
+  const txtIdx = js.indexOf("format === 'txt'");
+  const txtBlock = js.substring(txtIdx, txtIdx + 300);
+  assert(!txtBlock.includes('\\uFEFF'), 'txt handler must NOT add BOM');
 });
 
 test('downloadFile creates and immediately removes anchor element', () => {
@@ -851,6 +857,235 @@ test('content.js captures all selection ranges (not just first)', () => {
 test('content.js checks for collapsed/empty selection', () => {
   const js = fs.readFileSync(path.join(EXT, 'content.js'), 'utf8');
   assert(js.includes('isCollapsed'), 'Must check for collapsed selection');
+});
+
+// ═══════════════════════════════════════════════════════════════
+// SECTION 8: KEYBOARD SHORTCUTS
+// ═══════════════════════════════════════════════════════════════
+
+console.log('\n--- Section 8: Keyboard shortcuts ---');
+
+test('manifest.json defines keyboard shortcut commands', () => {
+  const m = JSON.parse(fs.readFileSync(path.join(EXT, 'manifest.json'), 'utf8'));
+  assert(m.commands, 'Must have commands section');
+  assert(m.commands['copy-page-text'], 'Must have copy-page-text command');
+  assert(m.commands['page-to-txt'], 'Must have page-to-txt command');
+  assert(m.commands['page-to-pdf'], 'Must have page-to-pdf command');
+});
+
+test('manifest.json commands have suggested keys', () => {
+  const m = JSON.parse(fs.readFileSync(path.join(EXT, 'manifest.json'), 'utf8'));
+  for (const cmd of ['copy-page-text', 'page-to-txt', 'page-to-pdf']) {
+    assert(m.commands[cmd].suggested_key, cmd + ' must have suggested_key');
+    assert(m.commands[cmd].suggested_key.default, cmd + ' must have default key');
+    assert(m.commands[cmd].description, cmd + ' must have description');
+  }
+});
+
+test('background.js handles keyboard commands', () => {
+  const js = fs.readFileSync(path.join(EXT, 'background.js'), 'utf8');
+  assert(js.includes('COMMAND_MAP'), 'Must have COMMAND_MAP');
+  assert(js.includes('commands.onCommand'), 'Must listen for keyboard commands');
+  assert(js.includes("'copy-page-text'"), 'Must map copy-page-text command');
+  assert(js.includes("'page-to-txt'"), 'Must map page-to-txt command');
+  assert(js.includes("'page-to-pdf'"), 'Must map page-to-pdf command');
+});
+
+test('background.js shares injection logic between menu and keyboard', () => {
+  const js = fs.readFileSync(path.join(EXT, 'background.js'), 'utf8');
+  assert(js.includes('injectAndMessage'), 'Must have shared injectAndMessage function');
+  // Both keyboard and context menu handlers must use it
+  const matches = js.match(/injectAndMessage/g);
+  assert(matches && matches.length >= 3,
+    'injectAndMessage must be called from both handlers plus defined, found ' + (matches ? matches.length : 0));
+});
+
+// ═══════════════════════════════════════════════════════════════
+// SECTION 9: LOADING FEEDBACK AND BETTER ERRORS
+// ═══════════════════════════════════════════════════════════════
+
+console.log('\n--- Section 9: Loading feedback and better errors ---');
+
+test('popup.html has status message element', () => {
+  const html = fs.readFileSync(path.join(EXT, 'popup.html'), 'utf8');
+  assert(html.includes('status-msg'), 'Must have status-msg element');
+});
+
+test('popup.js has showStatus function for loading/success feedback', () => {
+  const js = fs.readFileSync(path.join(EXT, 'popup.js'), 'utf8');
+  assert(js.includes('showStatus'), 'Must have showStatus function');
+  assert(js.includes('status-msg'), 'Must reference status-msg element');
+  assert(js.includes("'loading'") || js.includes('"loading"'), 'Must have loading state');
+  assert(js.includes("'success'") || js.includes('"success"'), 'Must have success state');
+});
+
+test('popup.js shows loading state before injection', () => {
+  const js = fs.readFileSync(path.join(EXT, 'popup.js'), 'utf8');
+  // showStatus must be called before chrome.tabs.query
+  const loadingIdx = js.indexOf("showStatus('Processing...'");
+  const queryIdx = js.indexOf('chrome.tabs.query');
+  assert(loadingIdx > 0 && queryIdx > 0 && loadingIdx < queryIdx,
+    'Must show loading before starting injection');
+});
+
+test('popup.js shows success toast before closing', () => {
+  const js = fs.readFileSync(path.join(EXT, 'popup.js'), 'utf8');
+  assert(js.includes("'Downloaded!'") || js.includes('"Downloaded!"'), 'Must show Downloaded! for file exports');
+  assert(js.includes("'Copied!'") || js.includes('"Copied!"'), 'Must show Copied! for clipboard');
+  assert(js.includes('setTimeout') && js.includes('window.close'), 'Must delay close for user to see feedback');
+});
+
+test('popup.js disables buttons during processing', () => {
+  const js = fs.readFileSync(path.join(EXT, 'popup.js'), 'utf8');
+  assert(js.includes('setButtonsDisabled'), 'Must have setButtonsDisabled function');
+  assert(js.includes('.disabled'), 'Must set disabled property on buttons');
+});
+
+test('popup.css has status message styling', () => {
+  const css = fs.readFileSync(path.join(EXT, 'popup.css'), 'utf8');
+  assert(css.includes('#status-msg'), 'Must style status-msg');
+  assert(css.includes('.status-loading'), 'Must style loading state');
+  assert(css.includes('.status-success'), 'Must style success state');
+});
+
+test('popup.css has disabled button styling', () => {
+  const css = fs.readFileSync(path.join(EXT, 'popup.css'), 'utf8');
+  assert(css.includes('button:disabled'), 'Must style disabled buttons');
+});
+
+test('popup.js has actionable Brave Shields error messages', () => {
+  const js = fs.readFileSync(path.join(EXT, 'popup.js'), 'utf8');
+  assert(js.includes('Shields') || js.includes('shields'), 'Must mention Brave Shields in errors');
+  assert(js.includes('lion icon'), 'Must reference the Brave lion icon');
+  assert(js.includes('handleInjectionError'), 'Must have handleInjectionError function');
+});
+
+test('popup.js handles CSP errors with actionable advice', () => {
+  const js = fs.readFileSync(path.join(EXT, 'popup.js'), 'utf8');
+  assert(js.includes('Content Security Policy') || js.includes('CSP'),
+    'Must detect CSP errors');
+});
+
+// ═══════════════════════════════════════════════════════════════
+// SECTION 10: BUTTON TOOLTIPS AND SHORTCUTS HINT
+// ═══════════════════════════════════════════════════════════════
+
+console.log('\n--- Section 10: Button tooltips and shortcuts hint ---');
+
+test('popup.html buttons have title tooltips', () => {
+  const html = fs.readFileSync(path.join(EXT, 'popup.html'), 'utf8');
+  // Count buttons with title attributes
+  const btnWithTitle = (html.match(/<button[^>]+title="/g) || []).length;
+  assert(btnWithTitle >= 15, 'All 15 buttons must have title tooltips, found ' + btnWithTitle);
+});
+
+test('popup.html tooltips explain format differences', () => {
+  const html = fs.readFileSync(path.join(EXT, 'popup.html'), 'utf8');
+  assert(html.includes('Courier'), 'Typewriter tooltip must mention Courier font');
+  assert(html.includes('searchable'), 'Typewriter tooltip must mention searchable');
+  assert(html.includes('screenshot') || html.includes('snapshot'), 'Screenshot tooltip must describe visual capture');
+  assert(html.includes('Markdown') || html.includes('formatting'), 'Markdown tooltip must describe formatting');
+});
+
+test('popup.html has keyboard shortcuts hint footer', () => {
+  const html = fs.readFileSync(path.join(EXT, 'popup.html'), 'utf8');
+  assert(html.includes('shortcuts-hint'), 'Must have shortcuts-hint element');
+  assert(html.includes('Ctrl+Shift'), 'Must show keyboard shortcuts');
+});
+
+test('popup.css has shortcuts hint styling', () => {
+  const css = fs.readFileSync(path.join(EXT, 'popup.css'), 'utf8');
+  assert(css.includes('.shortcuts-hint'), 'Must style shortcuts-hint');
+});
+
+// ═══════════════════════════════════════════════════════════════
+// SECTION 11: INFO HEADER PURITY SANITIZATION
+// ═══════════════════════════════════════════════════════════════
+
+console.log('\n--- Section 11: Info header purity sanitization ---');
+
+test('content.js has sanitizeHeaderField function', () => {
+  const js = fs.readFileSync(path.join(EXT, 'content.js'), 'utf8');
+  assert(js.includes('sanitizeHeaderField'), 'Must have sanitizeHeaderField function');
+});
+
+test('content.js sanitizeHeaderField strips invisible Unicode', () => {
+  const js = fs.readFileSync(path.join(EXT, 'content.js'), 'utf8');
+  // Must strip zero-width chars, direction overrides, BOM
+  assert(js.includes('\\u200B') || js.includes('200B'), 'Must strip ZWSP');
+  assert(js.includes('\\uFEFF') || js.includes('FEFF'), 'Must strip BOM');
+});
+
+test('content.js sanitizeHeaderField normalizes typography to ASCII', () => {
+  const js = fs.readFileSync(path.join(EXT, 'content.js'), 'utf8');
+  const fnStart = js.indexOf('function sanitizeHeaderField');
+  const fnEnd = js.indexOf('function buildInfoHeader');
+  const fnBlock = js.substring(fnStart, fnEnd);
+  assert(fnBlock.includes('\\u2018') || fnBlock.includes('\\u2019'), 'Must normalize smart quotes');
+  assert(fnBlock.includes('\\u201C') || fnBlock.includes('\\u201D'), 'Must normalize double quotes');
+  assert(fnBlock.includes('\\u2013') || fnBlock.includes('\\u2014'), 'Must normalize dashes');
+});
+
+test('content.js sanitizeHeaderField has final printable ASCII filter', () => {
+  const js = fs.readFileSync(path.join(EXT, 'content.js'), 'utf8');
+  const fnStart = js.indexOf('function sanitizeHeaderField');
+  const fnEnd = js.indexOf('function buildInfoHeader');
+  const fnBlock = js.substring(fnStart, fnEnd);
+  assert(fnBlock.includes('\\x20-\\x7E'), 'Must filter to printable ASCII range');
+});
+
+test('content.js buildInfoHeader uses sanitizeHeaderField for all dynamic fields', () => {
+  const js = fs.readFileSync(path.join(EXT, 'content.js'), 'utf8');
+  const fnStart = js.indexOf('function buildInfoHeader');
+  const fnEnd = js.indexOf('// --- CLIPBOARD FEEDBACK');
+  const fnBlock = js.substring(fnStart, fnEnd);
+  assert(fnBlock.includes('safeTitle'), 'Must sanitize title');
+  assert(fnBlock.includes('safeUrl'), 'Must sanitize URL');
+  assert(fnBlock.includes('safeDate'), 'Must sanitize date');
+  assert(fnBlock.includes('safeTime'), 'Must sanitize time');
+  assert(fnBlock.includes('safeScope'), 'Must sanitize scope');
+  assert(fnBlock.includes('safeFormat'), 'Must sanitize format');
+});
+
+test('content.js markdown header also uses sanitizeHeaderField', () => {
+  const js = fs.readFileSync(path.join(EXT, 'content.js'), 'utf8');
+  const mdIdx = js.indexOf("format === 'md'");
+  const mdBlock = js.substring(mdIdx, mdIdx + 500);
+  assert(mdBlock.includes('sanitizeHeaderField'), 'Markdown header must use sanitizeHeaderField');
+});
+
+// Simulate sanitizeHeaderField to verify its purity
+function sanitizeHeaderField(str) {
+  if (!str) return '';
+  str = str.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '');
+  str = str.replace(/[\u200B-\u200F\u2028-\u202F\uFEFF\u00AD\u034F\u061C\u180E\u2060-\u2064\u2066-\u206F]/g, '');
+  str = str.replace(/[\u2018\u2019\u201A\u201B]/g, "'");
+  str = str.replace(/[\u201C\u201D\u201E\u201F]/g, '"');
+  str = str.replace(/[\u2013\u2014]/g, '-');
+  str = str.replace(/\u2026/g, '...');
+  str = str.replace(/[\u00A0]/g, ' ');
+  str = str.replace(/[^\x20-\x7E\t\n]/g, '');
+  return str.trim();
+}
+
+test('sanitizeHeaderField: dirty title produces clean ASCII', () => {
+  const dirty = '\uFEFFMy \u201CSmart\u201D Page\u2014Title\u200B';
+  const clean = sanitizeHeaderField(dirty);
+  assert(clean === 'My "Smart" Page-Title', 'Must sanitize to: My "Smart" Page-Title, got: ' + clean);
+  assert(isCleanForTypewriter(clean + '\n'), 'Result must be typewriter-clean bytes');
+});
+
+test('sanitizeHeaderField: URL with invisible chars produces clean ASCII', () => {
+  const dirty = 'https://example\u200B.com/path\u200D?q=hello\uFEFF';
+  const clean = sanitizeHeaderField(dirty);
+  assert(clean === 'https://example.com/path?q=hello', 'Must strip invisibles from URL, got: ' + clean);
+  assert(isCleanForTypewriter(clean + '\n'), 'URL must be typewriter-clean bytes');
+});
+
+test('sanitizeHeaderField: empty and null inputs handled', () => {
+  assert(sanitizeHeaderField('') === '', 'Empty string returns empty');
+  assert(sanitizeHeaderField(null) === '', 'Null returns empty');
+  assert(sanitizeHeaderField(undefined) === '', 'Undefined returns empty');
 });
 
 // ═══════════════════════════════════════════════════════════════
