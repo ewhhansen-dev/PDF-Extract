@@ -1678,6 +1678,132 @@ test('test-suite sanitizeOutput regex patterns match text-extract.js', () => {
 });
 
 // ═══════════════════════════════════════════════════════════════
+// SECTION 16: ROUND 5 IMPROVEMENTS — UI, AUDIT, PAPER SIZE, CLIPBOARD
+// ═══════════════════════════════════════════════════════════════
+
+console.log('\n--- Section 16a: popup.css box-sizing ---');
+
+test('popup.css has universal box-sizing: border-box', () => {
+  const css = fs.readFileSync(path.join(EXT, 'popup.css'), 'utf8');
+  assert(css.includes('box-sizing: border-box'), 'Must have box-sizing: border-box');
+  assert(css.includes('*, *::before, *::after'), 'Must apply to all elements via universal selector');
+});
+
+console.log('\n--- Section 16b: popup.css focus-visible styles ---');
+
+test('popup.css has :focus-visible styles for keyboard accessibility', () => {
+  const css = fs.readFileSync(path.join(EXT, 'popup.css'), 'utf8');
+  assert(css.includes('button:focus-visible'), 'Must have button:focus-visible rule');
+  assert(css.includes('outline:') || css.includes('outline-color:') || css.includes('outline: 2px'),
+    'Must define an outline for focus-visible');
+  assert(css.includes('outline-offset'), 'Must have outline-offset for visual separation');
+});
+
+test('popup.css has dark-mode focus-visible override', () => {
+  const css = fs.readFileSync(path.join(EXT, 'popup.css'), 'utf8');
+  const darkSection = css.substring(css.indexOf('prefers-color-scheme: dark'));
+  assert(darkSection.includes('focus-visible'), 'Dark mode must override focus-visible outline color');
+});
+
+console.log('\n--- Section 16c: audit-bytes.js includes background.js ---');
+
+test('audit-bytes.js FILES array includes background.js', () => {
+  const src = fs.readFileSync(path.join(__dirname, 'audit-bytes.js'), 'utf8');
+  assert(src.includes("'background.js'") || src.includes('"background.js"'),
+    'FILES array must include background.js');
+});
+
+console.log('\n--- Section 16d: context menu title matches manifest name ---');
+
+test('background.js context menu parent title matches manifest name', () => {
+  const bgSrc = fs.readFileSync(path.join(EXT, 'background.js'), 'utf8');
+  const manifest = JSON.parse(fs.readFileSync(path.join(EXT, 'manifest.json'), 'utf8'));
+  // Extract the title from the parent context menu creation
+  const titleMatch = bgSrc.match(/id:\s*['"]pdf-extract-parent['"][^}]*title:\s*['"]([^'"]+)['"]/);
+  assert(titleMatch, 'Must find parent context menu title');
+  assert(titleMatch[1] === manifest.name,
+    'Context menu title "' + titleMatch[1] + '" must match manifest name "' + manifest.name + '"');
+});
+
+console.log('\n--- Section 16e: paper size locale detection ---');
+
+test('content.js has detectPaperSize function', () => {
+  const src = fs.readFileSync(path.join(EXT, 'content.js'), 'utf8');
+  assert(src.includes('function detectPaperSize'), 'Must define detectPaperSize function');
+  assert(src.includes('LETTER_REGIONS'), 'Must have LETTER_REGIONS array');
+});
+
+test('content.js LETTER_REGIONS includes major letter-size countries', () => {
+  const src = fs.readFileSync(path.join(EXT, 'content.js'), 'utf8');
+  const regionsMatch = src.match(/var LETTER_REGIONS = \[([^\]]+)\]/);
+  assert(regionsMatch, 'Must define LETTER_REGIONS as array');
+  const regions = regionsMatch[1];
+  assert(regions.includes("'US'"), 'Must include US');
+  assert(regions.includes("'CA'"), 'Must include CA (Canada)');
+  assert(regions.includes("'MX'"), 'Must include MX (Mexico)');
+});
+
+test('content.js detectPaperSize returns letter format for US regions', () => {
+  const src = fs.readFileSync(path.join(EXT, 'content.js'), 'utf8');
+  assert(src.includes("format: 'letter'"), 'Must return letter format');
+  assert(src.includes('215.9'), 'Must use 215.9mm width for letter');
+  assert(src.includes('279.4'), 'Must use 279.4mm height for letter');
+});
+
+test('content.js detectPaperSize returns a4 format as default', () => {
+  const src = fs.readFileSync(path.join(EXT, 'content.js'), 'utf8');
+  assert(src.includes("format: 'a4'"), 'Must return a4 format as default');
+});
+
+test('content.js typewriter PDF uses detectPaperSize instead of hardcoded a4', () => {
+  const src = fs.readFileSync(path.join(EXT, 'content.js'), 'utf8');
+  // The typewriter section should use detectPaperSize, not hardcoded 'a4'
+  const twStart = src.indexOf("format === 'pdf-typewriter'");
+  // Find the next "else if" after the typewriter section
+  const twEnd = src.indexOf('} else if', twStart + 1);
+  const twSection = src.substring(twStart, twEnd);
+  assert(twSection.includes('detectPaperSize()'), 'Typewriter PDF must call detectPaperSize()');
+  assert(twSection.includes('paperSize.format'), 'Typewriter PDF must use paperSize.format');
+  assert(twSection.includes('paperSize.width'), 'Typewriter PDF must use paperSize.width');
+  assert(twSection.includes('paperSize.height'), 'Typewriter PDF must use paperSize.height');
+});
+
+test('content.js screenshot PDF uses detectPaperSize instead of hardcoded a4', () => {
+  const src = fs.readFileSync(path.join(EXT, 'content.js'), 'utf8');
+  const pdfSection = src.substring(src.indexOf("format === 'pdf'"), src.indexOf("format === 'md'"));
+  assert(pdfSection.includes('detectPaperSize()') || pdfSection.includes('screenshotPaper'),
+    'Screenshot PDF must use detected paper size');
+});
+
+console.log('\n--- Section 16f: clipboard reliability improvements ---');
+
+test('content.js has execCommandCopy helper function', () => {
+  const src = fs.readFileSync(path.join(EXT, 'content.js'), 'utf8');
+  assert(src.includes('function execCommandCopy'), 'Must define execCommandCopy helper');
+});
+
+test('content.js copyToClipboard has retry mechanism', () => {
+  const src = fs.readFileSync(path.join(EXT, 'content.js'), 'utf8');
+  const fnStart = src.indexOf('async function copyToClipboard');
+  const fnEnd = src.indexOf('\n}', fnStart);
+  const fnBody = src.substring(fnStart, fnEnd);
+  // Should have multiple attempts
+  const attempts = (fnBody.match(/execCommandCopy/g) || []).length;
+  assert(attempts >= 2, 'Must have at least 2 execCommandCopy attempts (got ' + attempts + ')');
+  // Should have a delay between retries
+  assert(fnBody.includes('setTimeout'), 'Must have a delay between retry attempts');
+});
+
+test('content.js execCommandCopy returns boolean success status', () => {
+  const src = fs.readFileSync(path.join(EXT, 'content.js'), 'utf8');
+  const fnStart = src.indexOf('function execCommandCopy');
+  const fnEnd = src.indexOf('\n}', fnStart);
+  const fnBody = src.substring(fnStart, fnEnd);
+  assert(fnBody.includes('return ok'), 'execCommandCopy must return ok boolean');
+  assert(fnBody.includes("execCommand('copy')"), 'Must call execCommand copy');
+});
+
+// ═══════════════════════════════════════════════════════════════
 // RESULTS
 // ═══════════════════════════════════════════════════════════════
 

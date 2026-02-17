@@ -135,19 +135,20 @@ async function handleConversion(format, scope) {
       var twFilename = smartName + '_typewriter_' + timestamp + '.pdf';
       var twOutput = infoHeader + textContent;
       var jsPDFConstructor = window.jspdf.jsPDF;
-      var doc = new jsPDFConstructor({ orientation: 'p', unit: 'mm', format: 'a4' });
+      var paperSize = detectPaperSize();
+      var doc = new jsPDFConstructor({ orientation: 'p', unit: 'mm', format: paperSize.format });
 
       doc.setFont('Courier', 'normal');
       doc.setFontSize(11);
 
       var margin = { top: 25, bottom: 25, left: 20, right: 20 };
-      var contentWidth = 210 - margin.left - margin.right;
+      var contentWidth = paperSize.width - margin.left - margin.right;
       var lineHeight = 5.5;
       var lines = doc.splitTextToSize(twOutput, contentWidth);
       var y = margin.top;
 
       for (var li = 0; li < lines.length; li++) {
-        if (y + lineHeight > 297 - margin.bottom) {
+        if (y + lineHeight > paperSize.height - margin.bottom) {
           doc.addPage();
           y = margin.top;
         }
@@ -205,12 +206,13 @@ async function handleConversion(format, scope) {
       }
 
       var jsPDFCtor = window.jspdf.jsPDF;
-      var imgWidth = 210;
-      var pageHeight = 297;
+      var screenshotPaper = detectPaperSize();
+      var imgWidth = screenshotPaper.width;
+      var pageHeight = screenshotPaper.height;
       var imgHeight = canvas.height * imgWidth / canvas.width;
       var heightLeft = imgHeight;
 
-      var pdfDoc = new jsPDFCtor('p', 'mm', 'a4');
+      var pdfDoc = new jsPDFCtor('p', 'mm', screenshotPaper.format);
       var position = 0;
 
       pdfDoc.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
@@ -257,6 +259,26 @@ async function handleConversion(format, scope) {
       element.remove();
     }
   }
+}
+
+// --- PAPER SIZE DETECTION ---
+// US, Canada, Mexico, Philippines, Colombia use Letter (215.9x279.4mm).
+// Most other countries use A4 (210x297mm).
+// Detect via navigator.language locale region code.
+
+var LETTER_REGIONS = ['US', 'CA', 'MX', 'PH', 'CO', 'GT', 'CL', 'VE', 'PA', 'DO', 'SV', 'BO', 'HN', 'NI', 'CR', 'PR'];
+
+function detectPaperSize() {
+  var lang = (typeof navigator !== 'undefined' && navigator.language) || 'en-US';
+  // Extract region: "en-US" -> "US", "fr-CA" -> "CA", "en" -> ""
+  var parts = lang.split('-');
+  var region = (parts.length > 1) ? parts[parts.length - 1].toUpperCase() : '';
+  if (LETTER_REGIONS.indexOf(region) !== -1) {
+    // US Letter: 215.9mm x 279.4mm
+    return { format: 'letter', width: 215.9, height: 279.4 };
+  }
+  // A4: 210mm x 297mm (international default)
+  return { format: 'a4', width: 210, height: 297 };
 }
 
 // --- SMART FILENAME ---
@@ -402,25 +424,43 @@ function showCopyNotice() {
 // fall back to execCommand('copy') via a hidden textarea.
 
 async function copyToClipboard(text) {
+  // Strategy: try Clipboard API first, then execCommand fallback.
+  // Context menu invocations may have an expired user gesture by the time
+  // the content script runs, so the fallback is critical.
+
+  // Attempt 1: Clipboard API (requires secure context + user gesture)
   try {
     await navigator.clipboard.writeText(text);
     return;
+  } catch (e) { /* fall through to execCommand */ }
+
+  // Attempt 2: execCommand('copy') via hidden textarea
+  // Works even when Clipboard API gesture has expired (broader gesture window)
+  if (execCommandCopy(text)) return;
+
+  // Attempt 3: Brief delay then retry execCommand
+  // Some SPAs defer focus handling; a microtask delay can help
+  await new Promise(function (resolve) { setTimeout(resolve, 100); });
+  if (execCommandCopy(text)) return;
+
+  throw new Error('Clipboard access denied. Try using a .txt export instead.');
+}
+
+function execCommandCopy(text) {
+  var ta = document.createElement('textarea');
+  ta.value = text;
+  ta.style.cssText = 'position:fixed;left:-9999px;top:-9999px;opacity:0;';
+  document.body.appendChild(ta);
+  ta.focus();
+  ta.select();
+  var ok = false;
+  try {
+    ok = document.execCommand('copy');
   } catch (e) {
-    // Fallback: execCommand('copy') via hidden textarea
-    var ta = document.createElement('textarea');
-    ta.value = text;
-    ta.style.cssText = 'position:fixed;left:-9999px;top:-9999px;opacity:0;';
-    document.body.appendChild(ta);
-    ta.focus();
-    ta.select();
-    try {
-      document.execCommand('copy');
-    } catch (copyErr) {
-      document.body.removeChild(ta);
-      throw new Error('Clipboard access denied. Try using a .txt export instead.');
-    }
-    document.body.removeChild(ta);
+    ok = false;
   }
+  document.body.removeChild(ta);
+  return ok;
 }
 
 // --- DOWNLOAD ---

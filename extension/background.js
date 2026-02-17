@@ -12,7 +12,7 @@ chrome.runtime.onInstalled.addListener(() => {
   // Parent menu
   chrome.contextMenus.create({
     id: 'pdf-extract-parent',
-    title: 'PDF Extract',
+    title: 'Pure Text & PDF Extractor',
     contexts: ['page', 'selection']
   });
 

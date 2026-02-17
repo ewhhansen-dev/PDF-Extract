@@ -22,6 +22,7 @@ const FILES = [
   path.join(EXT, 'popup.js'),
   path.join(EXT, 'content.js'),
   path.join(EXT, 'text-extract.js'),
+  path.join(EXT, 'background.js'),
 ];
 
 console.log('=== SOURCE FILE BYTE AUDIT ===\n');

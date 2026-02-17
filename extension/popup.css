@@ -1,4 +1,8 @@
 /* Optimized for Brave Browser (Inter is Brave's native UI font) */
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
 body {
   width: 280px;
   padding: 12px;
@@ -120,6 +124,11 @@ button:active {
   border: 1px solid #a7f3d0;
 }
 
+button:focus-visible {
+  outline: 2px solid #4f46e5;
+  outline-offset: 2px;
+}
+
 button:disabled {
   opacity: 0.5;
   cursor: not-allowed;
@@ -167,6 +176,10 @@ button:disabled {
 
   button:active {
     background-color: #484868;
+  }
+
+  button:focus-visible {
+    outline-color: #818cf8;
   }
 
   .button-group.clipboard-group button {
