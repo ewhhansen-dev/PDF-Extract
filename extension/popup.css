@@ -21,7 +21,10 @@
   --font-mono: "SF Mono", "Cascadia Code", "Fira Code", monospace;
   --radius: 8px;
   --radius-sm: 6px;
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
 }
+
+*, *::before, *::after { box-sizing: border-box; }
 
 /* ── Base ──────────────────────────────────────────── */
 body {
@@ -47,7 +50,7 @@ body::-webkit-scrollbar-thumb:hover { background: #9ca3af; }
   display: flex;
   flex-direction: column;
   gap: 10px;
-  animation: fadeSlideIn 250ms ease-out both;
+  animation: fadeSlideIn 250ms var(--ease-out) both;
 }
 
 /* ── Title ────────────────────────────────────────── */
@@ -60,18 +63,38 @@ h2 {
   color: var(--text-primary);
 }
 
+h2::after {
+  content: '';
+  display: block;
+  width: 28px;
+  height: 2px;
+  background: linear-gradient(90deg, var(--pdf-accent), var(--md-accent), var(--text-accent));
+  margin: 6px auto 0;
+  border-radius: 1px;
+  opacity: 0.7;
+}
+
 /* ── Group Cards ──────────────────────────────────── */
 .group {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px 6px;
   padding: 10px 12px;
   border-radius: var(--radius);
   border-left: 3px solid transparent;
   background: var(--surface);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
   opacity: 0;
-  animation: fadeSlideIn 250ms ease-out both;
+  animation: fadeSlideIn 250ms var(--ease-out) both;
+  transition: box-shadow 200ms ease;
+}
+
+.group:hover {
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.07);
+}
+
+.group h3 {
+  grid-column: 1 / -1;
 }
 
 .group:nth-child(2) { animation-delay: 0ms; }
@@ -106,8 +129,10 @@ button {
   font-weight: 500;
   cursor: pointer;
   color: var(--text-primary);
-  transition: transform 150ms ease, background-color 150ms ease,
-              box-shadow 150ms ease;
+  transition: transform 150ms var(--ease-out),
+              background-color 150ms ease,
+              box-shadow 150ms ease,
+              opacity 200ms ease;
   position: relative;
   overflow: hidden;
   outline: none;
@@ -141,6 +166,10 @@ button:disabled {
   transform: none;
 }
 
+button.is-active:disabled {
+  opacity: 1;
+}
+
 /* ── Click Ripple ─────────────────────────────────── */
 button::after {
   content: '';
@@ -167,13 +196,19 @@ button.is-active {
 
 /* ── Status ───────────────────────────────────────── */
 #status {
-  margin-top: 12px;
-  padding: 0 12px;
+  margin-top: 8px;
+  padding: 6px 12px 0;
   font-family: var(--font-mono);
   font-size: 12px;
   min-height: 1.4em;
   color: var(--processing);
   position: relative;
+}
+
+#status:empty {
+  min-height: 0;
+  margin: 0;
+  padding: 0;
 }
 
 #status.typing::after {
@@ -183,7 +218,7 @@ button.is-active {
   font-weight: 300;
 }
 
-/* Processing pulsing dot */
+/* Processing pulsing dot -- shows immediately while typing */
 .status-processing::before {
   content: '';
   display: inline-block;
@@ -196,10 +231,10 @@ button.is-active {
   animation: pulseDot 1s ease-in-out infinite;
 }
 
-/* Success */
+/* Success -- color immediate, checkmark deferred until typed */
 .status-success { color: var(--success); }
 
-.status-success::before {
+.status-success.typed::before {
   content: '';
   display: inline-block;
   width: 10px;
@@ -212,9 +247,10 @@ button.is-active {
   animation: checkPop 300ms ease-out;
 }
 
-/* Error */
-.status-error {
-  color: var(--error);
+/* Error -- color immediate, shake deferred until typed */
+.status-error { color: var(--error); }
+
+.status-error.typed {
   animation: shake 400ms ease-out;
 }
 

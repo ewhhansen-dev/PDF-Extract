@@ -10,9 +10,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const status = document.getElementById('status');
   let typeTimer = null;
+  let fadeTimer = null;
 
   function typeStatus(text, className) {
     if (typeTimer) { clearInterval(typeTimer); typeTimer = null; }
+    if (fadeTimer) { clearTimeout(fadeTimer); fadeTimer = null; }
     status.textContent = '';
     status.className = className || '';
     let i = 0;
@@ -25,8 +27,9 @@ document.addEventListener('DOMContentLoaded', () => {
         clearInterval(typeTimer);
         typeTimer = null;
         setTimeout(() => status.classList.remove('typing'), 400);
+        status.classList.add('typed');
         if (className === 'status-success' || className === 'status-error') {
-          setTimeout(() => status.classList.add('status-fade'), 3000);
+          fadeTimer = setTimeout(() => status.classList.add('status-fade'), 3000);
         }
       }
     }, 40);
