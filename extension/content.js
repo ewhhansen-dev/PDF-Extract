@@ -23,7 +23,7 @@ async function handleConversion(format, scope) {
   if (scope === 'selection') {
     var selection = window.getSelection();
     if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
-      alert('No text selected. Please select some content first.');
+      showNotice('No text selected. Please select some content first.', 'warn');
       return;
     }
 
@@ -57,7 +57,7 @@ async function handleConversion(format, scope) {
   } else if (scope === 'modal') {
     var modalEl = findActiveModal();
     if (!modalEl) {
-      alert('No popup, modal, or preview window detected on this page.');
+      showNotice('No popup, modal, or preview window detected on this page.', 'warn');
       return;
     }
 
@@ -83,6 +83,12 @@ async function handleConversion(format, scope) {
     }
   }
 
+  // --- EMPTY EXTRACTION GUARD ---
+  if (!textContent || textContent.trim().length === 0) {
+    showNotice('No extractable text found on this page. The content may be dynamically loaded or protected.', 'error');
+    return;
+  }
+
   // --- SMART FILENAME ---
   // Use first line of extracted text (up to 7 words), fall back to page title
   var smartName = buildSmartFilename(textContent);
@@ -96,7 +102,7 @@ async function handleConversion(format, scope) {
   try {
     // --- CLIPBOARD ---
     if (format === 'clipboard') {
-      await navigator.clipboard.writeText(textContent);
+      await copyToClipboard(textContent);
       showCopyNotice();
       return;
     }
@@ -148,10 +154,10 @@ async function handleConversion(format, scope) {
       try {
         imgData = canvas.toDataURL('image/png');
       } catch (canvasErr) {
-        alert(
-          'Screenshot PDF blocked by browser privacy protection (Brave Shields). ' +
-          'Falling back to Typewriter PDF. To use Screenshot PDF, temporarily ' +
-          'lower Shields for this site via the lion icon in the address bar.'
+        showNotice(
+          'Screenshot PDF blocked by Brave Shields. Falling back to Typewriter PDF. ' +
+          'Lower Shields (lion icon) for visual screenshots.',
+          'warn'
         );
         format = 'pdf-typewriter';
         handleConversion(format, scope);
@@ -171,10 +177,9 @@ async function handleConversion(format, scope) {
           }
         }
         if (allSame && sample.length > 4) {
-          alert(
-            'Screenshot appears blank due to Brave Shields fingerprint protection. ' +
-            'Falling back to Typewriter PDF. To get a visual screenshot, lower ' +
-            'Shields for this site via the lion icon.'
+          showNotice(
+            'Screenshot blank due to Brave Shields. Falling back to Typewriter PDF.',
+            'warn'
           );
           format = 'pdf-typewriter';
           handleConversion(format, scope);
@@ -216,12 +221,12 @@ async function handleConversion(format, scope) {
       downloadFile(mdFilename, mdHeader + markdown, 'text/markdown;charset=utf-8');
 
     } else {
-      alert('Unknown format: ' + format);
+      showNotice('Unknown format: ' + format, 'error');
     }
 
   } catch (e) {
     console.error('Conversion failed:', e);
-    alert('Conversion failed: ' + e.message);
+    showNotice('Conversion failed: ' + e.message, 'error');
   } finally {
     if (element && element._isTemp) {
       element.remove();
@@ -319,25 +324,61 @@ function buildInfoHeader(title, url, scopeLabel, format) {
   return header;
 }
 
-// --- CLIPBOARD FEEDBACK ---
+// --- VISUAL NOTIFICATIONS ---
+// DOM-injected notifications that work on all pages (SPAs block native dialogs)
 
-function showCopyNotice() {
+function showNotice(msg, type) {
+  var bgColor = type === 'error' ? '#991b1b' : type === 'warn' ? '#92400e' : '#1a1a2e';
   var notice = document.createElement('div');
-  notice.textContent = 'Copied to clipboard';
+  notice.textContent = msg;
   notice.style.cssText =
     'position:fixed;top:20px;right:20px;z-index:2147483647;' +
-    'padding:12px 20px;background:#1a1a2e;color:#fff;' +
+    'padding:12px 20px;max-width:360px;background:' + bgColor + ';color:#fff;' +
     'border-radius:8px;font:600 14px Inter,system-ui,sans-serif;' +
     'box-shadow:0 4px 12px rgba(0,0,0,0.3);transition:opacity 0.3s;' +
-    'pointer-events:none;';
+    'pointer-events:none;line-height:1.4;';
   document.body.appendChild(notice);
+  var duration = type === 'error' ? 4000 : type === 'warn' ? 3000 : 1500;
   setTimeout(function () {
     notice.style.opacity = '0';
     setTimeout(function () { notice.remove(); }, 300);
-  }, 1500);
+  }, duration);
+}
+
+function showCopyNotice() {
+  showNotice('Copied to clipboard', 'success');
+}
+
+// --- CLIPBOARD WITH FALLBACK ---
+// navigator.clipboard.writeText requires user gesture and secure context.
+// On SPAs where the gesture expires before the content script runs,
+// fall back to execCommand('copy') via a hidden textarea.
+
+async function copyToClipboard(text) {
+  try {
+    await navigator.clipboard.writeText(text);
+    return;
+  } catch (e) {
+    // Fallback: execCommand('copy') via hidden textarea
+    var ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.cssText = 'position:fixed;left:-9999px;top:-9999px;opacity:0;';
+    document.body.appendChild(ta);
+    ta.focus();
+    ta.select();
+    try {
+      document.execCommand('copy');
+    } catch (copyErr) {
+      document.body.removeChild(ta);
+      throw new Error('Clipboard access denied. Try using a .txt export instead.');
+    }
+    document.body.removeChild(ta);
+  }
 }
 
 // --- DOWNLOAD ---
+// Uses a hidden anchor with non-bubbling click to bypass SPA event delegation
+// (React, Vue, Angular all use event delegation that can intercept anchor clicks)
 
 function downloadFile(filename, content, mimeType) {
   var blob = new Blob([content], { type: mimeType });
@@ -345,10 +386,12 @@ function downloadFile(filename, content, mimeType) {
   var a = document.createElement('a');
   a.href = url;
   a.download = filename;
+  a.style.display = 'none';
   document.body.appendChild(a);
-  a.click();
+  // Non-bubbling click bypasses React/Vue/Angular event delegation
+  a.dispatchEvent(new MouseEvent('click', { bubbles: false, cancelable: true, view: window }));
   document.body.removeChild(a);
-  URL.revokeObjectURL(url);
+  setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
 }
 
 // --- MODAL / POPUP / PREVIEW DETECTION ---

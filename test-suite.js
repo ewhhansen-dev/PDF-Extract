@@ -262,10 +262,10 @@ test('content.js findActiveModal filters by visibility and content', () => {
   assert(js.includes('zIndex'), 'Must consider z-index for topmost modal');
 });
 
-test('content.js findActiveModal shows alert when no modal found', () => {
+test('content.js shows notice when no modal found', () => {
   const js = fs.readFileSync(path.join(EXT, 'content.js'), 'utf8');
   assert(js.includes('No popup, modal, or preview window detected'),
-    'Must alert when no modal found');
+    'Must notify when no modal found');
 });
 
 test('popup.html has modal/popup button group', () => {
@@ -298,10 +298,12 @@ test('content.js uses extractPureText for modal extraction', () => {
 
 console.log('\n--- Section 2e: Copy to clipboard ---');
 
-test('content.js has clipboard format handler', () => {
+test('content.js has clipboard format handler with fallback', () => {
   const js = fs.readFileSync(path.join(EXT, 'content.js'), 'utf8');
   assert(js.includes("format === 'clipboard'"), 'Must handle clipboard format');
   assert(js.includes('navigator.clipboard.writeText'), 'Must use clipboard API');
+  assert(js.includes('copyToClipboard'), 'Must have copyToClipboard wrapper');
+  assert(js.includes('execCommand'), 'Must have execCommand fallback for SPAs');
 });
 
 test('content.js has copy success notification', () => {
@@ -830,7 +832,7 @@ test('content.js does not add BOM to txt output', () => {
 test('downloadFile creates and immediately removes anchor element', () => {
   const js = fs.readFileSync(path.join(EXT, 'content.js'), 'utf8');
   assert(js.includes('document.body.appendChild(a)'), 'Must append anchor');
-  assert(js.includes('a.click()'), 'Must trigger click');
+  assert(js.includes('dispatchEvent') || js.includes('a.click()'), 'Must trigger click');
   assert(js.includes('document.body.removeChild(a)'), 'Must remove anchor after');
 });
 
@@ -1037,7 +1039,7 @@ test('content.js sanitizeHeaderField has final printable ASCII filter', () => {
 test('content.js buildInfoHeader uses sanitizeHeaderField for all dynamic fields', () => {
   const js = fs.readFileSync(path.join(EXT, 'content.js'), 'utf8');
   const fnStart = js.indexOf('function buildInfoHeader');
-  const fnEnd = js.indexOf('// --- CLIPBOARD FEEDBACK');
+  const fnEnd = js.indexOf('// --- VISUAL NOTIFICATIONS');
   const fnBlock = js.substring(fnStart, fnEnd);
   assert(fnBlock.includes('safeTitle'), 'Must sanitize title');
   assert(fnBlock.includes('safeUrl'), 'Must sanitize URL');
@@ -1086,6 +1088,82 @@ test('sanitizeHeaderField: empty and null inputs handled', () => {
   assert(sanitizeHeaderField('') === '', 'Empty string returns empty');
   assert(sanitizeHeaderField(null) === '', 'Null returns empty');
   assert(sanitizeHeaderField(undefined) === '', 'Undefined returns empty');
+});
+
+// ═══════════════════════════════════════════════════════════════
+// SECTION 12: SPA COMPATIBILITY AND CHATGPT FIXES
+// ═══════════════════════════════════════════════════════════════
+
+console.log('\n--- Section 12: SPA compatibility and ChatGPT fixes ---');
+
+test('content.js uses DOM notifications instead of alert()', () => {
+  const js = fs.readFileSync(path.join(EXT, 'content.js'), 'utf8');
+  assert(js.includes('showNotice'), 'Must have showNotice function');
+  // Should NOT use alert() for user-facing messages
+  const alertCount = (js.match(/\balert\s*\(/g) || []).length;
+  assert(alertCount === 0, 'Must not use alert() (blocked on SPAs), found ' + alertCount + ' occurrences');
+});
+
+test('content.js showNotice supports error, warn, and success types', () => {
+  const js = fs.readFileSync(path.join(EXT, 'content.js'), 'utf8');
+  const fnStart = js.indexOf('function showNotice');
+  const fnEnd = js.indexOf('function showCopyNotice');
+  const fnBlock = js.substring(fnStart, fnEnd);
+  assert(fnBlock.includes("'error'") || fnBlock.includes('"error"'), 'Must handle error type');
+  assert(fnBlock.includes("'warn'") || fnBlock.includes('"warn"'), 'Must handle warn type');
+  assert(fnBlock.includes('z-index'), 'Must use high z-index for visibility');
+});
+
+test('content.js downloadFile uses non-bubbling click for SPA compatibility', () => {
+  const js = fs.readFileSync(path.join(EXT, 'content.js'), 'utf8');
+  const fnStart = js.indexOf('function downloadFile');
+  const fnEnd = js.indexOf('// --- MODAL');
+  const fnBlock = js.substring(fnStart, fnEnd);
+  assert(fnBlock.includes('dispatchEvent'), 'Must use dispatchEvent instead of .click()');
+  assert(fnBlock.includes('bubbles: false') || fnBlock.includes('bubbles:false'),
+    'Must use non-bubbling click to bypass React/SPA event delegation');
+});
+
+test('content.js has clipboard API fallback via execCommand', () => {
+  const js = fs.readFileSync(path.join(EXT, 'content.js'), 'utf8');
+  assert(js.includes('copyToClipboard'), 'Must have copyToClipboard function');
+  assert(js.includes('navigator.clipboard.writeText'), 'Must try modern clipboard API first');
+  assert(js.includes("execCommand('copy')"), 'Must fall back to execCommand');
+  assert(js.includes('textarea'), 'Must use hidden textarea for execCommand fallback');
+});
+
+test('content.js handles empty extraction results', () => {
+  const js = fs.readFileSync(path.join(EXT, 'content.js'), 'utf8');
+  assert(js.includes('textContent.trim().length === 0') || js.includes('textContent.trim().length===0'),
+    'Must check for empty extraction result');
+  assert(js.includes('No extractable text'), 'Must show message for empty extraction');
+});
+
+test('text-extract.js has ChatGPT-specific chat selectors', () => {
+  const js = fs.readFileSync(path.join(EXT, 'text-extract.js'), 'utf8');
+  assert(js.includes('conversation-turn'), 'Must detect ChatGPT conversation turns');
+  assert(js.includes('data-message-id'), 'Must detect ChatGPT message IDs');
+  assert(js.includes("main [role=\"presentation\"]") || js.includes("main .flex"),
+    'Must detect ChatGPT main conversation container');
+});
+
+test('text-extract.js chat detection searches messages across containers', () => {
+  const js = fs.readFileSync(path.join(EXT, 'text-extract.js'), 'utf8');
+  const fnStart = js.indexOf('function tryExtractChat');
+  const fnEnd = js.indexOf('function detectRole');
+  const fnBlock = js.substring(fnStart, fnEnd);
+  // Must try finding messages directly on root as fallback
+  assert(fnBlock.includes('Strategy 2') || fnBlock.includes('root.querySelectorAll'),
+    'Must have fallback to search messages on root element');
+});
+
+test('text-extract.js detectRole checks descendant data-message-author-role', () => {
+  const js = fs.readFileSync(path.join(EXT, 'text-extract.js'), 'utf8');
+  const fnStart = js.indexOf('function detectRole');
+  const fnEnd = js.indexOf('// --- PHASE 4:');
+  const fnBlock = js.substring(fnStart, fnEnd);
+  assert(fnBlock.includes("querySelector('[data-message-author-role]'"),
+    'Must search descendants for role attribute (ChatGPT turns)');
 });
 
 // ═══════════════════════════════════════════════════════════════

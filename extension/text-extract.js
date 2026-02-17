@@ -89,10 +89,11 @@
   // --- CHAT THREAD DETECTION ---
 
   var CHAT_CONTAINER_SELECTORS = [
-    // ChatGPT
+    // ChatGPT (modern: Tailwind classes, data-testid on turns, main wrapper)
+    'main [role="presentation"]',
+    'main .flex.flex-col',
     '[class*="conversation"]', '[class*="Conversation"]',
     'main [class*="thread"]', '[class*="Thread"]',
-    '[data-testid*="conversation"]',
 
     // Claude
     '[class*="chat-messages"]', '[class*="ChatMessages"]',
@@ -114,8 +115,10 @@
   ];
 
   var MESSAGE_SELECTORS = [
-    // ChatGPT
+    // ChatGPT (modern: data-testid on turns, data-message-author-role on messages)
+    '[data-testid*="conversation-turn"]',
     '[data-message-author-role]',
+    '[data-message-id]',
     '[class*="message "]', '[class*="Message"]',
     '[class*="ConversationItem"]',
 
@@ -300,32 +303,49 @@
 
   function tryExtractChat(root) {
     var chatContainer = null;
-    var i, sel, found;
+    var i, j, sel, found;
+    var messages = [];
 
+    // Strategy 1: Find a container that has multiple messages inside
     for (i = 0; i < CHAT_CONTAINER_SELECTORS.length; i++) {
       sel = CHAT_CONTAINER_SELECTORS[i];
       try {
-        chatContainer = root.querySelector(sel);
-        if (chatContainer) break;
-      } catch (e) { /* skip invalid selectors */ }
-    }
-
-    if (!chatContainer) return null;
-
-    // Find individual messages
-    var messages = [];
-    for (i = 0; i < MESSAGE_SELECTORS.length; i++) {
-      sel = MESSAGE_SELECTORS[i];
-      try {
-        found = chatContainer.querySelectorAll(sel);
-        if (found.length > 1) {
-          messages = Array.from(found);
-          break;
+        var containers = root.querySelectorAll(sel);
+        for (j = 0; j < containers.length; j++) {
+          var candidate = containers[j];
+          // Check if this container has message-like children
+          for (var mi = 0; mi < MESSAGE_SELECTORS.length; mi++) {
+            try {
+              found = candidate.querySelectorAll(MESSAGE_SELECTORS[mi]);
+              if (found.length > 1) {
+                chatContainer = candidate;
+                messages = Array.from(found);
+                break;
+              }
+            } catch (e) { /* skip */ }
+          }
+          if (messages.length > 1) break;
         }
-      } catch (e) { /* skip */ }
+      } catch (e) { /* skip invalid selectors */ }
+      if (messages.length > 1) break;
     }
 
-    if (messages.length < 2) return null;
+    // Strategy 2: If no container found, try finding messages directly on root
+    if (messages.length < 2) {
+      for (i = 0; i < MESSAGE_SELECTORS.length; i++) {
+        sel = MESSAGE_SELECTORS[i];
+        try {
+          found = root.querySelectorAll(sel);
+          if (found.length > 1) {
+            messages = Array.from(found);
+            chatContainer = root;
+            break;
+          }
+        } catch (e) { /* skip */ }
+      }
+    }
+
+    if (!chatContainer || messages.length < 2) return null;
 
     var lines = [];
     var msg, role, msgText, cleanText;
@@ -360,10 +380,20 @@
   }
 
   function detectRole(messageEl) {
-    // ChatGPT: data-message-author-role attribute
+    // ChatGPT: data-message-author-role attribute (may be on element or descendant)
     var authorRole = messageEl.getAttribute('data-message-author-role');
     if (authorRole) {
       return authorRole.charAt(0).toUpperCase() + authorRole.slice(1);
+    }
+
+    // ChatGPT turns: look for data-message-author-role on a descendant
+    var roleChild;
+    try {
+      roleChild = messageEl.querySelector('[data-message-author-role]');
+    } catch (e) { roleChild = null; }
+    if (roleChild) {
+      var childRole = roleChild.getAttribute('data-message-author-role');
+      if (childRole) return childRole.charAt(0).toUpperCase() + childRole.slice(1);
     }
 
     // Look for role in class names
@@ -377,8 +407,7 @@
     try {
       nameEl = messageEl.querySelector(
         '[class*="author"], [class*="Author"], [class*="sender"], [class*="Sender"], ' +
-        '[class*="name"], [class*="role"], [class*="Role"], ' +
-        '[data-message-author-role]'
+        '[class*="name"], [class*="role"], [class*="Role"]'
       );
     } catch (e) {
       nameEl = null;
