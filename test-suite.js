@@ -47,7 +47,8 @@ test('manifest.json exists and is valid JSON', () => {
   assert(Array.isArray(m.permissions), 'Must have permissions array');
   assert(m.permissions.includes('activeTab'), 'Must have activeTab permission');
   assert(m.permissions.includes('scripting'), 'Must have scripting permission');
-  assert(m.permissions.length === 2, 'Must have ONLY activeTab and scripting (no personal data)');
+  assert(m.permissions.includes('contextMenus'), 'Must have contextMenus permission');
+  assert(m.permissions.length === 3, 'Must have ONLY activeTab, scripting, and contextMenus');
 });
 
 test('popup.html exists and references popup.css and popup.js', () => {
@@ -74,7 +75,7 @@ test('popup.js exists and references all button IDs from popup.html', () => {
     htmlIds.push(match[1]);
   }
 
-  assert(htmlIds.length === 8, 'Must have exactly 8 button IDs, found ' + htmlIds.length);
+  assert(htmlIds.length === 12, 'Must have exactly 12 button IDs, found ' + htmlIds.length);
 
   for (const id of htmlIds) {
     assert(js.includes("'" + id + "'") || js.includes('"' + id + '"'),
@@ -187,6 +188,113 @@ test('content.js falls back gracefully when canvas is blocked', () => {
   const js = fs.readFileSync(path.join(EXT, 'content.js'), 'utf8');
   assert(js.includes('canvasErr') || js.includes('catch'),
     'Must catch canvas export errors');
+});
+
+console.log('\n--- Section 2c: Right-click context menu ---');
+
+test('background.js exists and registers context menu', () => {
+  const js = fs.readFileSync(path.join(EXT, 'background.js'), 'utf8');
+  assert(js.includes('contextMenus.create'), 'Must register context menu items');
+  assert(js.includes('contextMenus.onClicked'), 'Must handle menu clicks');
+  assert(js.includes('onInstalled'), 'Must register on extension install');
+});
+
+test('background.js has parent menu with submenu items', () => {
+  const js = fs.readFileSync(path.join(EXT, 'background.js'), 'utf8');
+  assert(js.includes('pdf-extract-parent'), 'Must have parent menu');
+  assert(js.includes('parentId'), 'Must have child items under parent');
+});
+
+test('background.js context menu covers txt, typewriter PDF, and markdown', () => {
+  const js = fs.readFileSync(path.join(EXT, 'background.js'), 'utf8');
+  assert(js.includes("format: 'txt'"), 'Must have txt format in context menu');
+  assert(js.includes("format: 'pdf-typewriter'"), 'Must have typewriter PDF in context menu');
+  assert(js.includes("format: 'md'"), 'Must have markdown in context menu');
+});
+
+test('background.js context menu includes modal scope', () => {
+  const js = fs.readFileSync(path.join(EXT, 'background.js'), 'utf8');
+  assert(js.includes("scope: 'modal'"), 'Must have modal scope in context menu');
+});
+
+test('background.js blocks injection on browser internal pages', () => {
+  const js = fs.readFileSync(path.join(EXT, 'background.js'), 'utf8');
+  assert(js.includes("brave://"), 'Must block brave:// in context menu handler');
+  assert(js.includes("chrome://"), 'Must block chrome:// in context menu handler');
+});
+
+test('background.js injects scripts the same way as popup.js', () => {
+  const js = fs.readFileSync(path.join(EXT, 'background.js'), 'utf8');
+  assert(js.includes('chrome.scripting.executeScript'), 'Must use scripting API');
+  assert(js.includes('text-extract.js'), 'Must inject text-extract.js');
+  assert(js.includes('content.js'), 'Must inject content.js');
+  assert(js.includes("action: 'convert'"), 'Must send convert message');
+});
+
+test('manifest.json references background.js as service worker', () => {
+  const m = JSON.parse(fs.readFileSync(path.join(EXT, 'manifest.json'), 'utf8'));
+  assert(m.background && m.background.service_worker === 'background.js',
+    'Must have background.js as service_worker');
+});
+
+console.log('\n--- Section 2d: Modal/Popup extraction ---');
+
+test('content.js handles modal scope', () => {
+  const js = fs.readFileSync(path.join(EXT, 'content.js'), 'utf8');
+  assert(js.includes("scope === 'modal'"), 'Must handle modal scope');
+  assert(js.includes('findActiveModal'), 'Must call findActiveModal');
+});
+
+test('content.js has modal detection selectors', () => {
+  const js = fs.readFileSync(path.join(EXT, 'content.js'), 'utf8');
+  assert(js.includes('MODAL_SELECTORS'), 'Must have MODAL_SELECTORS array');
+  assert(js.includes('role="dialog"'), 'Must detect dialog role');
+  assert(js.includes('dialog[open]'), 'Must detect HTML5 dialog');
+  assert(js.includes('modal'), 'Must detect modal classes');
+  assert(js.includes('preview') || js.includes('Preview'), 'Must detect preview classes');
+  assert(js.includes('lightbox') || js.includes('Lightbox'), 'Must detect lightbox classes');
+});
+
+test('content.js findActiveModal filters by visibility and content', () => {
+  const js = fs.readFileSync(path.join(EXT, 'content.js'), 'utf8');
+  assert(js.includes('getBoundingClientRect'), 'Must check element dimensions');
+  assert(js.includes('getComputedStyle'), 'Must check computed visibility');
+  assert(js.includes('zIndex'), 'Must consider z-index for topmost modal');
+});
+
+test('content.js findActiveModal shows alert when no modal found', () => {
+  const js = fs.readFileSync(path.join(EXT, 'content.js'), 'utf8');
+  assert(js.includes('No popup, modal, or preview window detected'),
+    'Must alert when no modal found');
+});
+
+test('popup.html has modal/popup button group', () => {
+  const html = fs.readFileSync(path.join(EXT, 'popup.html'), 'utf8');
+  assert(html.includes('modal-group'), 'Must have modal-group class');
+  assert(html.includes('Popup / Preview'), 'Must have Popup/Preview heading');
+  assert(html.includes('txt-modal'), 'Must have txt-modal button');
+  assert(html.includes('pdf-typewriter-modal'), 'Must have pdf-typewriter-modal button');
+  assert(html.includes('md-modal'), 'Must have md-modal button');
+  assert(html.includes('pdf-modal'), 'Must have pdf-modal button');
+});
+
+test('popup.js has modal button entries', () => {
+  const js = fs.readFileSync(path.join(EXT, 'popup.js'), 'utf8');
+  assert(js.includes("'txt-modal'"), 'Must have txt-modal entry');
+  assert(js.includes("scope: 'modal'"), 'Must use modal scope');
+});
+
+test('popup.css has modal group styling', () => {
+  const css = fs.readFileSync(path.join(EXT, 'popup.css'), 'utf8');
+  assert(css.includes('.modal-group'), 'Must style modal-group');
+});
+
+test('content.js uses extractPureText for modal extraction', () => {
+  const js = fs.readFileSync(path.join(EXT, 'content.js'), 'utf8');
+  // Count occurrences of extractPureText
+  const matches = js.match(/extractPureText/g);
+  assert(matches && matches.length >= 3,
+    'Must call extractPureText at least 3 times (page, selection, modal), found ' + (matches ? matches.length : 0));
 });
 
 // ═══════════════════════════════════════════════════════════════
@@ -607,12 +715,12 @@ test('downloadFile creates and immediately removes anchor element', () => {
 
 console.log('\n--- Section 7: Selection mode parity ---');
 
-test('content.js uses extractPureText for both page and selection', () => {
+test('content.js uses extractPureText for page, selection, and modal', () => {
   const js = fs.readFileSync(path.join(EXT, 'content.js'), 'utf8');
   // Count occurrences of extractPureText
   const matches = js.match(/extractPureText/g);
-  assert(matches && matches.length >= 2,
-    'Must call extractPureText at least twice (page and selection), found ' + (matches ? matches.length : 0));
+  assert(matches && matches.length >= 3,
+    'Must call extractPureText at least 3 times (page, selection, modal), found ' + (matches ? matches.length : 0));
 });
 
 test('content.js captures all selection ranges (not just first)', () => {

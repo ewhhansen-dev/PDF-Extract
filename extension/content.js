@@ -55,6 +55,23 @@ async function handleConversion(format, scope) {
       textContent = container.innerText || container.textContent || '';
     }
 
+  } else if (scope === 'modal') {
+    // Find the topmost visible modal/popup/preview/dialog overlay
+    var modalEl = findActiveModal();
+    if (!modalEl) {
+      alert('No popup, modal, or preview window detected on this page.');
+      return;
+    }
+
+    element = modalEl;
+    htmlContent = modalEl.innerHTML;
+
+    if (typeof extractPureText === 'function') {
+      textContent = extractPureText(modalEl);
+    } else {
+      textContent = modalEl.innerText || modalEl.textContent || '';
+    }
+
   } else {
     element = document.body;
     htmlContent = document.body.innerHTML;
@@ -212,4 +229,113 @@ function downloadFile(filename, content, mimeType) {
   a.click();
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
+}
+
+// --- MODAL / POPUP / PREVIEW DETECTION ---
+
+// Selectors that match common modal, dialog, preview, and overlay containers
+var MODAL_SELECTORS = [
+  // HTML5 and ARIA dialog elements
+  'dialog[open]',
+  '[role="dialog"]',
+  '[role="alertdialog"]',
+
+  // Class-based modal patterns (GitHub, GitLab, cloud storage, etc.)
+  '[class*="modal"]:not([class*="modal-backdrop"]):not([class*="modalOverlay"])',
+  '[class*="Modal"]:not([class*="ModalBackdrop"]):not([class*="ModalOverlay"])',
+  '[class*="dialog"]',
+  '[class*="Dialog"]',
+
+  // Preview/lightbox overlays (file preview windows like the one in screenshot)
+  '[class*="preview"]',
+  '[class*="Preview"]',
+  '[class*="lightbox"]',
+  '[class*="Lightbox"]',
+  '[class*="file-viewer"]',
+  '[class*="FileViewer"]',
+  '[class*="file-preview"]',
+  '[class*="FilePreview"]',
+
+  // Popup/popover patterns
+  '[class*="popup-content"]',
+  '[class*="PopupContent"]',
+  '[class*="popover-content"]',
+  '[class*="PopoverContent"]',
+
+  // Drawer/panel overlays
+  '[class*="drawer-content"]',
+  '[class*="DrawerContent"]',
+  '[class*="sheet-content"]',
+  '[class*="SheetContent"]',
+
+  // React/framework-specific
+  '.ReactModal__Content',
+  '[data-testid*="modal"]',
+  '[data-testid*="dialog"]',
+  '[data-testid*="preview"]',
+
+  // Overlay content containers
+  '[class*="overlay-content"]',
+  '[class*="OverlayContent"]'
+];
+
+function findActiveModal() {
+  var candidates = [];
+  var i, j, sel, els, el;
+
+  // Gather all potential modal elements
+  for (i = 0; i < MODAL_SELECTORS.length; i++) {
+    sel = MODAL_SELECTORS[i];
+    try {
+      els = document.querySelectorAll(sel);
+      for (j = 0; j < els.length; j++) {
+        candidates.push(els[j]);
+      }
+    } catch (e) { /* skip invalid selector */ }
+  }
+
+  // Deduplicate
+  candidates = Array.from(new Set(candidates));
+
+  // Filter to visible elements with substantive content
+  var visible = [];
+  for (i = 0; i < candidates.length; i++) {
+    el = candidates[i];
+
+    // Must be in the DOM
+    if (!document.body.contains(el)) continue;
+
+    // Must be visible (has dimensions and not hidden)
+    var rect = el.getBoundingClientRect();
+    if (rect.width < 50 || rect.height < 50) continue;
+
+    var cs = window.getComputedStyle(el);
+    if (cs.display === 'none' || cs.visibility === 'hidden' || cs.opacity === '0') continue;
+
+    // Must have substantive text content (> 20 chars after trim)
+    var text = (el.innerText || el.textContent || '').trim();
+    if (text.length < 20) continue;
+
+    // Score: prefer larger z-index, more content, and later DOM position
+    var zIndex = parseInt(cs.zIndex, 10) || 0;
+    var area = rect.width * rect.height;
+
+    visible.push({
+      el: el,
+      zIndex: zIndex,
+      textLen: text.length,
+      area: area
+    });
+  }
+
+  if (visible.length === 0) return null;
+
+  // Sort: highest z-index first, then largest content, then largest area
+  visible.sort(function (a, b) {
+    if (b.zIndex !== a.zIndex) return b.zIndex - a.zIndex;
+    if (b.textLen !== a.textLen) return b.textLen - a.textLen;
+    return b.area - a.area;
+  });
+
+  return visible[0].el;
 }

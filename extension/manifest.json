@@ -1,12 +1,16 @@
 {
   "manifest_version": 3,
   "name": "Pure Text & PDF Extractor",
-  "version": "2.1",
-  "description": "Extract pure typewriter-grade text, PDF, or Markdown from any webpage, chat thread, canvas, or code block.",
+  "version": "3.0",
+  "description": "Extract pure typewriter-grade text, PDF, or Markdown from any webpage, chat thread, canvas, popup, or code block. Right-click or use the toolbar icon.",
   "permissions": [
     "activeTab",
-    "scripting"
+    "scripting",
+    "contextMenus"
   ],
+  "background": {
+    "service_worker": "background.js"
+  },
   "action": {
     "default_popup": "popup.html",
     "default_title": "Extract Content"

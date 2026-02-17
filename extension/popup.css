@@ -68,6 +68,21 @@ button:active {
   background-color: #d1d5db;
 }
 
+/* Modal/Popup group styling - orange accent to stand out */
+.button-group.modal-group button {
+  background-color: #fff7ed;
+  border-color: #fed7aa;
+  color: #9a3412;
+}
+
+.button-group.modal-group button:hover {
+  background-color: #ffedd5;
+}
+
+.button-group.modal-group button:active {
+  background-color: #fed7aa;
+}
+
 #error-msg {
   margin-top: 8px;
   padding: 8px 10px;
@@ -116,6 +131,20 @@ button:active {
 
   .button-group.primary button:active {
     background-color: #6d28d9;
+  }
+
+  .button-group.modal-group button {
+    background-color: #3b2010;
+    border-color: #78350f;
+    color: #fdba74;
+  }
+
+  .button-group.modal-group button:hover {
+    background-color: #4a2c16;
+  }
+
+  .button-group.modal-group button:active {
+    background-color: #5c3a20;
   }
 
   #error-msg {
