@@ -1,27 +1,28 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+  <meta charset="utf-8">
   <link rel="stylesheet" href="popup.css">
 </head>
 <body>
   <div class="container">
     <h2>Converter</h2>
-    <div class="group">
+    <div class="group group-pdf">
       <h3>PDF</h3>
       <button id="pdf-page">Save Page</button>
       <button id="pdf-selection">Save Selection</button>
     </div>
-    <div class="group">
+    <div class="group group-md">
       <h3>Markdown</h3>
       <button id="md-page">Save Page</button>
       <button id="md-selection">Save Selection</button>
     </div>
-    <div class="group">
+    <div class="group group-text">
       <h3>Text</h3>
       <button id="text-page">Save Page</button>
       <button id="text-selection">Save Selection</button>
     </div>
-    <div id="status"></div>
+    <div id="status" aria-live="polite"></div>
   </div>
   <script src="popup.js"></script>
 </body>
