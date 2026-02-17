@@ -110,12 +110,57 @@ async function handleConversion(format, scope) {
 
     } else if (format === 'pdf') {
       var pdfFilename = title + '_screenshot_' + timestamp + '.pdf';
+
+      // Brave Browser: canvas fingerprint protection randomizes toDataURL.
+      // allowTaint + useCORS helps Brave Shields pass through local renders.
       var canvas = await html2canvas(element, {
         useCORS: true,
-        logging: false
+        allowTaint: true,
+        logging: false,
+        removeContainer: true
       });
 
-      var imgData = canvas.toDataURL('image/png');
+      var imgData;
+      try {
+        imgData = canvas.toDataURL('image/png');
+      } catch (canvasErr) {
+        // Brave Shields or CSP may block canvas export on some pages.
+        // Fall back to typewriter PDF with a notice.
+        alert(
+          'Screenshot PDF blocked by browser privacy protection (Brave Shields). ' +
+          'Falling back to Typewriter PDF. To use Screenshot PDF, temporarily ' +
+          'lower Shields for this site via the lion icon in the address bar.'
+        );
+        format = 'pdf-typewriter';
+        handleConversion(format, scope);
+        return;
+      }
+
+      // Brave canvas fingerprint protection: detect blank/randomized canvas.
+      // A fully white or uniform canvas means fingerprint protection is active.
+      var ctx = canvas.getContext('2d');
+      if (ctx && canvas.width > 0 && canvas.height > 0) {
+        var sample = ctx.getImageData(0, 0, Math.min(canvas.width, 100), 1).data;
+        var allSame = true;
+        for (var si = 4; si < sample.length; si += 4) {
+          if (sample[si] !== sample[0] || sample[si+1] !== sample[1] ||
+              sample[si+2] !== sample[2]) {
+            allSame = false;
+            break;
+          }
+        }
+        if (allSame && sample.length > 4) {
+          alert(
+            'Screenshot appears blank due to Brave Shields fingerprint protection. ' +
+            'Falling back to Typewriter PDF. To get a visual screenshot, lower ' +
+            'Shields for this site via the lion icon.'
+          );
+          format = 'pdf-typewriter';
+          handleConversion(format, scope);
+          return;
+        }
+      }
+
       var jsPDFCtor = window.jspdf.jsPDF;
       var imgWidth = 210;
       var pageHeight = 297;

@@ -72,10 +72,18 @@
     '[class*="sidebar"]', '[class*="Sidebar"]',
     '[class*="side-panel"]',
 
-    // Ads
+    // Ads (Brave Shields strips most, but catch remnants)
     '[class*="ad-"]', '[class*="advert"]',
     '[id*="ad-"]', '[id*="advert"]',
-    'ins.adsbygoogle'
+    'ins.adsbygoogle',
+
+    // Brave Browser UI noise (Rewards, Wallet, News widgets)
+    '[class*="brave-rewards"]', '[class*="brave-wallet"]',
+    '[class*="BraveRewards"]', '[class*="BraveWallet"]',
+    '[id*="brave-rewards"]', '[id*="brave-wallet"]',
+    '[class*="brave-news"]', '[class*="BraveNews"]',
+    '[class*="brave-shields"]',
+    '[class*="rewards-panel"]', '[class*="RewardsPanel"]'
   ];
 
   // --- CHAT THREAD DETECTION ---
@@ -163,6 +171,17 @@
   window.extractPureText = function (rootElement) {
     // Work on a deep clone so we never touch the live DOM
     var clone = rootElement.cloneNode(true);
+
+    // Phase 0: Brave Speedreader detection
+    // When Brave Speedreader is active, the page DOM is simplified.
+    // Look for Speedreader's content container and extract from that.
+    var speedreaderContent = clone.querySelector(
+      '#article, [class*="speedreader"], [class*="Speedreader"], ' +
+      '[data-speedreader], .content-container'
+    );
+    if (speedreaderContent && speedreaderContent.textContent.trim().length > 100) {
+      clone = speedreaderContent;
+    }
 
     // Phase 1: Remove all non-content elements
     removeNonContent(clone);

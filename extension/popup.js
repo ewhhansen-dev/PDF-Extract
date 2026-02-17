@@ -17,7 +17,25 @@ for (const [id, config] of Object.entries(buttons)) {
 
 function injectAndRun(format, scope) {
   chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-    const tabId = tabs[0].id;
+    const tab = tabs[0];
+    const tabId = tab.id;
+    const url = tab.url || '';
+
+    // Block injection into browser-internal pages (Brave, Chrome, Edge)
+    if (url.startsWith('brave://') || url.startsWith('chrome://') ||
+        url.startsWith('edge://') || url.startsWith('about:') ||
+        url.startsWith('chrome-extension://') || url.startsWith('devtools://')) {
+      showError('Cannot extract from browser internal pages. Navigate to a website first.');
+      return;
+    }
+
+    // Block injection into web store pages (restricted by browser)
+    if (url.includes('chrome.google.com/webstore') ||
+        url.includes('addons.mozilla.org') ||
+        url.includes('microsoftedge.microsoft.com/addons')) {
+      showError('Cannot extract from browser extension stores (restricted by the browser).');
+      return;
+    }
 
     // Only inject libraries actually needed for this format
     const files = [];
@@ -41,7 +59,14 @@ function injectAndRun(format, scope) {
       files: files
     }, () => {
       if (chrome.runtime.lastError) {
-        console.error(chrome.runtime.lastError.message);
+        var errMsg = chrome.runtime.lastError.message || '';
+        console.error(errMsg);
+        // Provide specific guidance for common Brave/Chrome injection failures
+        if (errMsg.includes('Cannot access') || errMsg.includes('cannot be scripted')) {
+          showError('This page is protected by the browser and cannot be extracted.');
+        } else {
+          showError('Failed to load: ' + errMsg);
+        }
         return;
       }
       chrome.tabs.sendMessage(tabId, {
@@ -52,4 +77,15 @@ function injectAndRun(format, scope) {
       window.close();
     });
   });
+}
+
+function showError(msg) {
+  var el = document.getElementById('error-msg');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'error-msg';
+    document.body.appendChild(el);
+  }
+  el.textContent = msg;
+  el.style.display = 'block';
 }

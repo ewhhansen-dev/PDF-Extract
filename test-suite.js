@@ -66,8 +66,8 @@ test('popup.js exists and references all button IDs from popup.html', () => {
   const html = fs.readFileSync(path.join(EXT, 'popup.html'), 'utf8');
   const js = fs.readFileSync(path.join(EXT, 'popup.js'), 'utf8');
 
-  // Extract all button IDs from HTML
-  const idRegex = /id="([^"]+)"/g;
+  // Extract all button IDs from HTML (only <button> elements, not divs)
+  const idRegex = /<button[^>]+id="([^"]+)"/g;
   let match;
   const htmlIds = [];
   while ((match = idRegex.exec(html)) !== null) {
@@ -143,6 +143,50 @@ test('popup.js conditionally injects jspdf only for pdf formats', () => {
   // Should have conditional logic
   assert(js.includes("format === 'pdf'") || js.includes('format === "pdf"'),
     'Must conditionally check for pdf format');
+});
+
+console.log('\n--- Section 2b: Brave Browser optimizations ---');
+
+test('popup.js blocks brave:// and chrome:// internal pages', () => {
+  const js = fs.readFileSync(path.join(EXT, 'popup.js'), 'utf8');
+  assert(js.includes("brave://"), 'Must detect brave:// pages');
+  assert(js.includes("chrome://"), 'Must detect chrome:// pages');
+  assert(js.includes("edge://"), 'Must detect edge:// pages');
+});
+
+test('popup.js has error display function', () => {
+  const js = fs.readFileSync(path.join(EXT, 'popup.js'), 'utf8');
+  assert(js.includes('showError'), 'Must have showError function');
+  assert(js.includes('error-msg'), 'Must reference error-msg element');
+});
+
+test('popup.html has error message container', () => {
+  const html = fs.readFileSync(path.join(EXT, 'popup.html'), 'utf8');
+  assert(html.includes('error-msg'), 'Must have error-msg element');
+});
+
+test('popup.css has dark mode support for Brave', () => {
+  const css = fs.readFileSync(path.join(EXT, 'popup.css'), 'utf8');
+  assert(css.includes('prefers-color-scheme: dark'), 'Must support dark mode');
+  assert(css.includes('Inter'), 'Must use Inter font (Brave native)');
+});
+
+test('popup.css has error message styling', () => {
+  const css = fs.readFileSync(path.join(EXT, 'popup.css'), 'utf8');
+  assert(css.includes('#error-msg'), 'Must style error message');
+});
+
+test('content.js handles Brave canvas fingerprint protection', () => {
+  const js = fs.readFileSync(path.join(EXT, 'content.js'), 'utf8');
+  assert(js.includes('allowTaint'), 'Must use allowTaint for Brave Shields');
+  assert(js.includes('fingerprint') || js.includes('Shields') || js.includes('privacy protection'),
+    'Must reference Brave fingerprint/Shields protection');
+});
+
+test('content.js falls back gracefully when canvas is blocked', () => {
+  const js = fs.readFileSync(path.join(EXT, 'content.js'), 'utf8');
+  assert(js.includes('canvasErr') || js.includes('catch'),
+    'Must catch canvas export errors');
 });
 
 // ═══════════════════════════════════════════════════════════════
@@ -249,6 +293,19 @@ test('text-extract.js removes chat action buttons (Copy/Edit/Retry)', () => {
   assert(js.includes('aria-label="Copy"'), 'Must strip Copy buttons');
   assert(js.includes('aria-label="Edit"'), 'Must strip Edit buttons');
   assert(js.includes('aria-label="Retry"'), 'Must strip Retry buttons');
+});
+
+test('text-extract.js strips Brave Browser UI noise', () => {
+  const js = fs.readFileSync(path.join(EXT, 'text-extract.js'), 'utf8');
+  assert(js.includes('brave-rewards'), 'Must strip Brave Rewards');
+  assert(js.includes('brave-wallet'), 'Must strip Brave Wallet');
+  assert(js.includes('brave-news') || js.includes('BraveNews'), 'Must strip Brave News');
+});
+
+test('text-extract.js has Brave Speedreader detection', () => {
+  const js = fs.readFileSync(path.join(EXT, 'text-extract.js'), 'utf8');
+  assert(js.includes('speedreader') || js.includes('Speedreader'),
+    'Must detect Brave Speedreader');
 });
 
 // ═══════════════════════════════════════════════════════════════

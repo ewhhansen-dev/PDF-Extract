@@ -1,5 +1,8 @@
 # Pure Text & PDF Extractor - Operations Manual
 
+Optimized for **Brave Browser**. Also compatible with Chrome, Edge, and
+other Chromium-based browsers.
+
 ## Download
 
 ### Option A: Clone from GitHub
@@ -16,39 +19,48 @@ cd PDF-Extract
 3. Click **Download ZIP**
 4. Extract the ZIP to any folder on your computer
 
-The only folder you need for the extension is `extension/`. Everything else
-(node_modules, test files) is for development only.
+The only folder you need is `extension/`. Everything else (node_modules,
+test files) is for development only.
 
 ---
 
 ## Install
 
-### Chrome / Chromium / Brave / Edge
+### Brave Browser (Primary)
 
-1. Open your browser and navigate to `chrome://extensions/`
+1. Open Brave and navigate to `brave://extensions/`
 2. Enable **Developer mode** (toggle in the top-right corner)
 3. Click **Load unpacked**
 4. Select the `extension/` folder inside the downloaded repository
 5. The extension icon appears in your toolbar
+6. (Optional) Click the puzzle piece icon and pin the extension
 
 No build step. No npm install. No API keys. No accounts.
 
-### Firefox
+### Chrome / Edge / Chromium
 
-Firefox support for Manifest V3 extensions is available in Firefox 109+.
+1. Navigate to `chrome://extensions/` (or `edge://extensions/`)
+2. Enable **Developer mode**
+3. Click **Load unpacked**
+4. Select the `extension/` folder
+
+### Firefox (Limited)
+
+Firefox 109+ supports Manifest V3 extensions.
 
 1. Open `about:debugging#/runtime/this-firefox`
 2. Click **Load Temporary Add-on**
-3. Select the `extension/manifest.json` file
+3. Select `extension/manifest.json`
 
-Note: Temporary add-ons in Firefox are removed when the browser closes.
+Note: Temporary add-ons are removed when Firefox closes.
 
 ### Verify Installation
 
 - Click the extension icon in the toolbar
 - You should see a popup with two groups of buttons:
-  - **Pure Text (Typewriter)** - 4 blue buttons
+  - **Pure Text (Typewriter)** - 4 purple buttons
   - **Standard** - 4 gray buttons
+- The popup supports dark mode (follows your Brave/system theme)
 
 ### Permissions
 
@@ -141,7 +153,7 @@ Every `.txt` file passes through five layers before reaching your disk:
 
 1. **DOM Surgery** - Removes 16 tag types (script, style, svg, iframe, etc.)
    plus 40+ CSS selector patterns targeting navigation, forms, toolbars,
-   cookie banners, chat UI noise, sidebars, and ads.
+   cookie banners, chat UI noise, sidebars, ads, and Brave UI elements.
 
 2. **Hidden Element Removal** - Detects and strips elements with
    display:none, visibility:hidden, opacity:0, offscreen positioning,
@@ -192,11 +204,16 @@ reversed_string = my_string[::-1]
 Extracts the main content while stripping:
 
 - Navigation bars and menus
-- Sidebars
-- Footers
-- Cookie banners and consent dialogs
-- Advertisements
+- Sidebars and footers
+- Cookie banners and consent dialogs (Brave Shields blocks most already)
+- Advertisements (Brave Shields blocks most already)
 - Hidden elements
+
+### Brave Speedreader Pages
+
+When Brave Speedreader is active, the extension detects the simplified
+reader DOM and extracts directly from the content container. This produces
+especially clean output since Speedreader has already stripped most noise.
 
 ### Code Blocks
 
@@ -211,7 +228,47 @@ structure as plain text.
 
 ---
 
+## Brave Browser Notes
+
+### Brave Shields and .txt Export
+
+Brave Shields has zero effect on .txt and Typewriter PDF exports. These
+formats use pure DOM text extraction with no canvas, no images, and no
+cross-origin requests. They work perfectly with Shields at any level.
+
+### Brave Shields and Screenshot PDF
+
+Brave's canvas fingerprint protection can interfere with Screenshot PDF.
+If Screenshot PDF produces a blank file, the extension automatically falls
+back to Typewriter PDF and explains the issue. To get a visual screenshot:
+
+1. Click the Brave lion icon in the address bar
+2. Lower Shields for that specific site
+3. Retry the Screenshot PDF export
+4. Re-enable Shields when done
+
+This only affects Screenshot PDF. All other export formats work regardless
+of Shields settings.
+
+### Brave Rewards / Wallet / News
+
+The extension automatically strips Brave Rewards prompts, Wallet UI
+elements, and Brave News widgets from text extraction. These will not
+appear in your .txt output.
+
+### Dark Mode
+
+The extension popup automatically follows your Brave dark mode setting.
+No configuration needed.
+
+---
+
 ## Troubleshooting
+
+### "Cannot extract from browser internal pages"
+
+The extension cannot run on `brave://` pages (settings, extensions, new
+tab, etc.). Navigate to an actual website first.
 
 ### "No text selected" error
 
@@ -224,18 +281,27 @@ Some pages load content dynamically. Wait for the page to fully load before
 exporting. Single-page applications that render via JavaScript should work
 as long as the content is visible in the DOM when you click export.
 
-### Extension not appearing
+### Extension not appearing in Brave
 
-Confirm that Developer mode is enabled in chrome://extensions/ and that you
-selected the `extension/` folder (not the parent repository folder).
+1. Go to `brave://extensions/`
+2. Confirm Developer mode is enabled (top-right toggle)
+3. Confirm you selected the `extension/` folder (not the parent repo folder)
+4. If the extension shows an error, click "Errors" to see details
+
+### Screenshot PDF is blank
+
+Brave's fingerprint protection randomizes canvas output. The extension
+detects this and falls back to Typewriter PDF automatically. See the
+"Brave Shields and Screenshot PDF" section above.
 
 ### Conversion failed error
 
-Open the browser developer console (F12) to see the detailed error. Common
+Open the Brave developer console (F12) to see the detailed error. Common
 causes:
 
-- CORS restrictions on screenshot PDF (cross-origin images)
+- CORS restrictions on cross-origin images (lower Shields temporarily)
 - Very large pages exceeding memory limits
+- Page uses strict Content Security Policy
 
 ---
 
@@ -243,12 +309,12 @@ causes:
 
 ```
 extension/
-  manifest.json        Chrome MV3 extension manifest
+  manifest.json        Chrome MV3 extension manifest (Brave-compatible)
   popup.html           Extension popup UI
-  popup.css            Popup styling
-  popup.js             Button handlers and script injection
-  text-extract.js      Pure text extraction engine (zero dependencies)
-  content.js           Format orchestrator (delegates to text-extract.js)
+  popup.css            Popup styling (Inter font, dark mode, Brave purple)
+  popup.js             Button handlers, injection, Brave page detection
+  text-extract.js      Pure text engine (Speedreader, Shields, Brave UI aware)
+  content.js           Format orchestrator (canvas fingerprint fallback)
   lib/
     jspdf.umd.min.js   PDF generation library (bundled)
     html2canvas.min.js Screenshot-to-canvas library (bundled)
@@ -271,7 +337,7 @@ Libraries are only injected when needed:
 Tests require Node.js (any version 14+). No npm install needed.
 
 ```bash
-node test-suite.js     # 61 functional tests
+node test-suite.js     # 61+ functional tests
 node audit-bytes.js    # Byte-level source file audit
 ```
 
@@ -288,3 +354,5 @@ Both must report zero failures before any release.
 - Only two permissions: activeTab and scripting
 - All libraries are bundled locally (no CDN fetches)
 - The .txt output is guaranteed free of hidden encodings at the byte level
+- Compatible with Brave Shields at maximum protection level (.txt and PDF)
+- No trackers, no analytics, no telemetry

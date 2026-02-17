@@ -1,23 +1,28 @@
+/* Optimized for Brave Browser (Inter is Brave's native UI font) */
 body {
   width: 280px;
   padding: 12px;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   font-size: 13px;
   margin: 0;
+  background: #fff;
+  color: #1a1a2e;
 }
 
 h3 {
   margin: 0 0 10px 0;
   text-align: center;
   font-size: 15px;
+  font-weight: 600;
 }
 
 h4 {
   margin: 0 0 6px 0;
-  font-size: 12px;
-  color: #555;
+  font-size: 11px;
+  color: #68778d;
   text-transform: uppercase;
   letter-spacing: 0.5px;
+  font-weight: 600;
 }
 
 .button-group {
@@ -27,26 +32,95 @@ h4 {
   gap: 4px;
 }
 
+/* Brave purple accent for primary actions (typewriter .txt) */
 .button-group.primary button {
-  background-color: #1a73e8;
+  background-color: #7c3aed;
   color: white;
-  border-color: #1557b0;
+  border-color: #6d28d9;
 }
 
 .button-group.primary button:hover {
-  background-color: #1557b0;
+  background-color: #6d28d9;
+}
+
+.button-group.primary button:active {
+  background-color: #5b21b6;
 }
 
 button {
   padding: 7px 10px;
   cursor: pointer;
-  background-color: #f0f0f0;
-  border: 1px solid #ccc;
-  border-radius: 4px;
+  background-color: #f0f0f5;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-family: inherit;
   font-size: 12px;
+  font-weight: 500;
   text-align: left;
+  transition: background-color 0.1s;
 }
 
 button:hover {
-  background-color: #e0e0e0;
+  background-color: #e5e7eb;
+}
+
+button:active {
+  background-color: #d1d5db;
+}
+
+#error-msg {
+  margin-top: 8px;
+  padding: 8px 10px;
+  background-color: #fef2f2;
+  color: #991b1b;
+  border: 1px solid #fecaca;
+  border-radius: 6px;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+/* Brave dark mode support (respects system/browser preference) */
+@media (prefers-color-scheme: dark) {
+  body {
+    background: #1e1e2e;
+    color: #e0e0e0;
+  }
+
+  h4 {
+    color: #a0aec0;
+  }
+
+  button {
+    background-color: #2d2d3f;
+    border-color: #404060;
+    color: #e0e0e0;
+  }
+
+  button:hover {
+    background-color: #3a3a52;
+  }
+
+  button:active {
+    background-color: #484868;
+  }
+
+  .button-group.primary button {
+    background-color: #7c3aed;
+    border-color: #6d28d9;
+    color: white;
+  }
+
+  .button-group.primary button:hover {
+    background-color: #8b5cf6;
+  }
+
+  .button-group.primary button:active {
+    background-color: #6d28d9;
+  }
+
+  #error-msg {
+    background-color: #3b1111;
+    color: #fca5a5;
+    border-color: #7f1d1d;
+  }
 }

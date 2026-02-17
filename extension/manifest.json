@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Pure Text & PDF Extractor",
-  "version": "2.0",
+  "version": "2.1",
   "description": "Extract pure typewriter-grade text, PDF, or Markdown from any webpage, chat thread, canvas, or code block.",
   "permissions": [
     "activeTab",
