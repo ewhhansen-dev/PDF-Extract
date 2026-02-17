@@ -16,6 +16,33 @@ chrome.runtime.onInstalled.addListener(() => {
     contexts: ['page', 'selection']
   });
 
+  // Copy to clipboard
+  chrome.contextMenus.create({
+    id: 'ctx-clip-page',
+    parentId: 'pdf-extract-parent',
+    title: 'Copy Page Text to Clipboard',
+    contexts: ['page', 'selection']
+  });
+  chrome.contextMenus.create({
+    id: 'ctx-clip-selection',
+    parentId: 'pdf-extract-parent',
+    title: 'Copy Selection to Clipboard',
+    contexts: ['selection']
+  });
+  chrome.contextMenus.create({
+    id: 'ctx-clip-modal',
+    parentId: 'pdf-extract-parent',
+    title: 'Copy Popup Text to Clipboard',
+    contexts: ['page', 'selection']
+  });
+
+  chrome.contextMenus.create({
+    id: 'ctx-sep-0',
+    parentId: 'pdf-extract-parent',
+    type: 'separator',
+    contexts: ['page', 'selection']
+  });
+
   // .txt exports
   chrome.contextMenus.create({
     id: 'ctx-txt-page',
@@ -95,6 +122,9 @@ chrome.runtime.onInstalled.addListener(() => {
 // --- MENU CLICK HANDLER ---
 
 var MENU_MAP = {
+  'ctx-clip-page':      { format: 'clipboard',      scope: 'page' },
+  'ctx-clip-selection':  { format: 'clipboard',      scope: 'selection' },
+  'ctx-clip-modal':      { format: 'clipboard',      scope: 'modal' },
   'ctx-txt-page':      { format: 'txt',            scope: 'page' },
   'ctx-txt-selection':  { format: 'txt',            scope: 'selection' },
   'ctx-txt-modal':      { format: 'txt',            scope: 'modal' },

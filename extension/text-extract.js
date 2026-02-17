@@ -169,12 +169,14 @@
    * @returns {string} Clean plain text, guaranteed free of hidden encodings
    */
   window.extractPureText = function (rootElement) {
+    // Phase -1: Extract text from same-origin iframes before cloning.
+    // Iframes are removed during cleanup, so we harvest their content first.
+    var iframeTexts = extractSameOriginIframes(rootElement);
+
     // Work on a deep clone so we never touch the live DOM
     var clone = rootElement.cloneNode(true);
 
     // Phase 0: Brave Speedreader detection
-    // When Brave Speedreader is active, the page DOM is simplified.
-    // Look for Speedreader's content container and extract from that.
     var speedreaderContent = clone.querySelector(
       '#article, [class*="speedreader"], [class*="Speedreader"], ' +
       '[data-speedreader], .content-container'
@@ -192,15 +194,59 @@
     // Phase 3: Detect if this is a chat thread and format accordingly
     var chatText = tryExtractChat(clone);
     if (chatText) {
-      return sanitizeOutput(chatText);
+      var result = chatText;
+      if (iframeTexts) {
+        result += '\n\n' + iframeTexts;
+      }
+      return sanitizeOutput(result);
     }
 
     // Phase 4: Extract with structure awareness
     var rawText = extractStructured(clone);
 
+    // Append any same-origin iframe content
+    if (iframeTexts) {
+      rawText += '\n\n' + iframeTexts;
+    }
+
     // Phase 5: Sanitize to typewriter-grade purity
     return sanitizeOutput(rawText);
   };
+
+  // --- PHASE -1: SAME-ORIGIN IFRAME EXTRACTION ---
+  // Harvests text from same-origin iframes before they get removed.
+  // Cross-origin iframes throw a SecurityError on contentDocument access.
+
+  function extractSameOriginIframes(root) {
+    var iframes;
+    try {
+      iframes = root.querySelectorAll('iframe');
+    } catch (e) {
+      return '';
+    }
+    if (!iframes || iframes.length === 0) return '';
+
+    var parts = [];
+    for (var i = 0; i < iframes.length; i++) {
+      try {
+        var iframeDoc = iframes[i].contentDocument || iframes[i].contentWindow.document;
+        if (!iframeDoc || !iframeDoc.body) continue;
+
+        // Clone the iframe body and run structured extraction on it
+        var iframeClone = iframeDoc.body.cloneNode(true);
+        removeNonContent(iframeClone);
+        removeHiddenElements(iframeClone);
+        var text = extractStructured(iframeClone);
+        if (text && text.trim().length > 20) {
+          parts.push(text.trim());
+        }
+      } catch (e) {
+        // Cross-origin iframe - SecurityError expected, skip silently
+      }
+    }
+
+    return parts.join('\n\n');
+  }
 
   // --- PHASE 1: REMOVE NON-CONTENT ---
 

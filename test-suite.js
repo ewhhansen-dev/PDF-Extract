@@ -75,7 +75,7 @@ test('popup.js exists and references all button IDs from popup.html', () => {
     htmlIds.push(match[1]);
   }
 
-  assert(htmlIds.length === 12, 'Must have exactly 12 button IDs, found ' + htmlIds.length);
+  assert(htmlIds.length === 15, 'Must have exactly 15 button IDs, found ' + htmlIds.length);
 
   for (const id of htmlIds) {
     assert(js.includes("'" + id + "'") || js.includes('"' + id + '"'),
@@ -291,10 +291,129 @@ test('popup.css has modal group styling', () => {
 
 test('content.js uses extractPureText for modal extraction', () => {
   const js = fs.readFileSync(path.join(EXT, 'content.js'), 'utf8');
-  // Count occurrences of extractPureText
   const matches = js.match(/extractPureText/g);
   assert(matches && matches.length >= 3,
     'Must call extractPureText at least 3 times (page, selection, modal), found ' + (matches ? matches.length : 0));
+});
+
+console.log('\n--- Section 2e: Copy to clipboard ---');
+
+test('content.js has clipboard format handler', () => {
+  const js = fs.readFileSync(path.join(EXT, 'content.js'), 'utf8');
+  assert(js.includes("format === 'clipboard'"), 'Must handle clipboard format');
+  assert(js.includes('navigator.clipboard.writeText'), 'Must use clipboard API');
+});
+
+test('content.js has copy success notification', () => {
+  const js = fs.readFileSync(path.join(EXT, 'content.js'), 'utf8');
+  assert(js.includes('showCopyNotice'), 'Must have showCopyNotice function');
+  assert(js.includes('Copied to clipboard'), 'Must show copy confirmation text');
+});
+
+test('popup.html has clipboard button group', () => {
+  const html = fs.readFileSync(path.join(EXT, 'popup.html'), 'utf8');
+  assert(html.includes('clipboard-group'), 'Must have clipboard-group class');
+  assert(html.includes('clip-page'), 'Must have clip-page button');
+  assert(html.includes('clip-selection'), 'Must have clip-selection button');
+  assert(html.includes('clip-modal'), 'Must have clip-modal button');
+});
+
+test('popup.js has clipboard button entries', () => {
+  const js = fs.readFileSync(path.join(EXT, 'popup.js'), 'utf8');
+  assert(js.includes("'clip-page'"), 'Must have clip-page entry');
+  assert(js.includes("format: 'clipboard'"), 'Must use clipboard format');
+});
+
+test('popup.css has clipboard group styling', () => {
+  const css = fs.readFileSync(path.join(EXT, 'popup.css'), 'utf8');
+  assert(css.includes('.clipboard-group'), 'Must style clipboard-group');
+});
+
+test('background.js has clipboard context menu items', () => {
+  const js = fs.readFileSync(path.join(EXT, 'background.js'), 'utf8');
+  assert(js.includes('ctx-clip-page'), 'Must have clipboard page menu item');
+  assert(js.includes("format: 'clipboard'"), 'Must map clipboard format');
+});
+
+console.log('\n--- Section 2f: Smart filenames ---');
+
+test('content.js has buildSmartFilename function', () => {
+  const js = fs.readFileSync(path.join(EXT, 'content.js'), 'utf8');
+  assert(js.includes('buildSmartFilename'), 'Must have buildSmartFilename function');
+  assert(js.includes('slice(0, 7)'), 'Must limit to 7 words');
+});
+
+test('content.js smart filename falls back to page title', () => {
+  const js = fs.readFileSync(path.join(EXT, 'content.js'), 'utf8');
+  assert(js.includes('document.title'), 'Must fall back to page title');
+  assert(js.includes("name.length < 3"), 'Must check for too-short names');
+});
+
+console.log('\n--- Section 2g: Info header ---');
+
+test('content.js has buildInfoHeader function', () => {
+  const js = fs.readFileSync(path.join(EXT, 'content.js'), 'utf8');
+  assert(js.includes('buildInfoHeader'), 'Must have buildInfoHeader function');
+  assert(js.includes('========'), 'Must have header separator');
+});
+
+test('content.js info header includes title, URL, date, scope, format', () => {
+  const js = fs.readFileSync(path.join(EXT, 'content.js'), 'utf8');
+  assert(js.includes("'Title:"), 'Header must include title field');
+  assert(js.includes("'URL:"), 'Header must include URL field');
+  assert(js.includes("'Date:"), 'Header must include date field');
+  assert(js.includes("'Scope:"), 'Header must include scope field');
+  assert(js.includes("'Format:"), 'Header must include format field');
+});
+
+test('content.js prepends header to txt and typewriter PDF', () => {
+  const js = fs.readFileSync(path.join(EXT, 'content.js'), 'utf8');
+  assert(js.includes('infoHeader + textContent'), 'Must prepend header to txt output');
+  assert(js.includes('infoHeader + textContent'), 'Must prepend header to typewriter output');
+});
+
+test('content.js uses markdown comment header for .md files', () => {
+  const js = fs.readFileSync(path.join(EXT, 'content.js'), 'utf8');
+  assert(js.includes('<!--'), 'Markdown header must be an HTML comment');
+  assert(js.includes('-->'), 'Markdown header must close comment');
+});
+
+test('content.js clipboard does NOT get info header', () => {
+  const js = fs.readFileSync(path.join(EXT, 'content.js'), 'utf8');
+  // clipboard handler should write textContent directly, not infoHeader + textContent
+  const clipIdx = js.indexOf("format === 'clipboard'");
+  const clipBlock = js.substring(clipIdx, clipIdx + 200);
+  assert(clipBlock.includes('textContent') && !clipBlock.includes('infoHeader'),
+    'Clipboard must copy raw text without info header');
+});
+
+console.log('\n--- Section 2h: Same-origin iframe extraction ---');
+
+test('text-extract.js has extractSameOriginIframes function', () => {
+  const js = fs.readFileSync(path.join(EXT, 'text-extract.js'), 'utf8');
+  assert(js.includes('extractSameOriginIframes'), 'Must have extractSameOriginIframes function');
+});
+
+test('text-extract.js tries contentDocument on iframes', () => {
+  const js = fs.readFileSync(path.join(EXT, 'text-extract.js'), 'utf8');
+  assert(js.includes('contentDocument'), 'Must access iframe contentDocument');
+  assert(js.includes('contentWindow'), 'Must access iframe contentWindow');
+});
+
+test('text-extract.js catches cross-origin SecurityError', () => {
+  const js = fs.readFileSync(path.join(EXT, 'text-extract.js'), 'utf8');
+  const fnStart = js.indexOf('function extractSameOriginIframes');
+  const fnEnd = js.indexOf('\n  // --- PHASE 1:', fnStart);
+  const fnBlock = js.substring(fnStart, fnEnd);
+  assert(fnBlock.includes('catch'), 'Must catch SecurityError for cross-origin iframes');
+});
+
+test('text-extract.js calls extractSameOriginIframes before clone', () => {
+  const js = fs.readFileSync(path.join(EXT, 'text-extract.js'), 'utf8');
+  const iframeIdx = js.indexOf('extractSameOriginIframes(rootElement)');
+  const cloneIdx = js.indexOf('rootElement.cloneNode(true)');
+  assert(iframeIdx > 0 && cloneIdx > 0 && iframeIdx < cloneIdx,
+    'Must extract iframe content before cloning (live DOM access needed)');
 });
 
 // ═══════════════════════════════════════════════════════════════

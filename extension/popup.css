@@ -32,6 +32,21 @@ h4 {
   gap: 4px;
 }
 
+/* Green accent for clipboard actions */
+.button-group.clipboard-group button {
+  background-color: #ecfdf5;
+  border-color: #a7f3d0;
+  color: #065f46;
+}
+
+.button-group.clipboard-group button:hover {
+  background-color: #d1fae5;
+}
+
+.button-group.clipboard-group button:active {
+  background-color: #a7f3d0;
+}
+
 /* Brave purple accent for primary actions (typewriter .txt) */
 .button-group.primary button {
   background-color: #7c3aed;
@@ -117,6 +132,20 @@ button:active {
 
   button:active {
     background-color: #484868;
+  }
+
+  .button-group.clipboard-group button {
+    background-color: #0a2e1f;
+    border-color: #065f46;
+    color: #6ee7b7;
+  }
+
+  .button-group.clipboard-group button:hover {
+    background-color: #103d2a;
+  }
+
+  .button-group.clipboard-group button:active {
+    background-color: #1a4d35;
   }
 
   .button-group.primary button {

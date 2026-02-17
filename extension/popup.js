@@ -1,4 +1,7 @@
 const buttons = {
+  'clip-page':               { format: 'clipboard',      scope: 'page' },
+  'clip-selection':          { format: 'clipboard',      scope: 'selection' },
+  'clip-modal':              { format: 'clipboard',      scope: 'modal' },
   'txt-page':                { format: 'txt',            scope: 'page' },
   'txt-selection':           { format: 'txt',            scope: 'selection' },
   'pdf-typewriter-page':     { format: 'pdf-typewriter', scope: 'page' },
