@@ -173,8 +173,7 @@ async function handleConversion(format, scope) {
           'warn'
         );
         format = 'pdf-typewriter';
-        handleConversion(format, scope);
-        return;
+        return handleConversion(format, scope);
       }
 
       // Brave canvas fingerprint protection: detect blank/randomized canvas.
@@ -195,8 +194,7 @@ async function handleConversion(format, scope) {
             'warn'
           );
           format = 'pdf-typewriter';
-          handleConversion(format, scope);
-          return;
+          return handleConversion(format, scope);
         }
       }
 
@@ -364,6 +362,7 @@ function buildInfoHeader(title, url, scopeLabel, format) {
 // DOM-injected notifications that work on all pages (SPAs block native dialogs)
 
 function showNotice(msg, type) {
+  if (!document.body) return;
   var bgColor = type === 'error' ? '#991b1b' : type === 'warn' ? '#92400e' : '#1a1a2e';
   var notice = document.createElement('div');
   notice.textContent = msg;

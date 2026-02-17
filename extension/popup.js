@@ -61,7 +61,9 @@ function injectAndRun(format, scope) {
     // Block injection into browser-internal pages (Brave, Chrome, Edge)
     if (url.startsWith('brave://') || url.startsWith('chrome://') ||
         url.startsWith('edge://') || url.startsWith('about:') ||
-        url.startsWith('chrome-extension://') || url.startsWith('devtools://')) {
+        url.startsWith('chrome-extension://') || url.startsWith('devtools://') ||
+        url.startsWith('view-source:') || url.startsWith('data:') ||
+        url.startsWith('blob:')) {
       showError('Cannot extract from browser internal pages. Navigate to a website first.');
       return;
     }
@@ -101,11 +103,22 @@ function injectAndRun(format, scope) {
         handleInjectionError(errMsg, url);
         return;
       }
+      var responded = false;
+      var safetyTimer = setTimeout(function () {
+        if (!responded) {
+          responded = true;
+          showError('Operation timed out. The page may have blocked the extension. Try again.');
+        }
+      }, 15000);
+
       chrome.tabs.sendMessage(tabId, {
         action: 'convert',
         format: format,
         scope: scope
       }, function (response) {
+        if (responded) return;
+        responded = true;
+        clearTimeout(safetyTimer);
         if (chrome.runtime.lastError) {
           showError('Could not communicate with page: ' + (chrome.runtime.lastError.message || ''));
           return;

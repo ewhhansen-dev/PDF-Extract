@@ -160,6 +160,10 @@ function injectAndMessage(tab, format, scope) {
   var tabId = tab.id;
   var url = tab.url || '';
 
+  // Clear any stale badge from a previous invocation (setTimeout in flashBadge
+  // may not fire if the service worker was terminated before the timer)
+  chrome.action.setBadgeText({ text: '', tabId: tabId });
+
   if (url.startsWith('brave://') || url.startsWith('chrome://') ||
       url.startsWith('edge://') || url.startsWith('about:') ||
       url.startsWith('chrome-extension://') || url.startsWith('devtools://') ||
@@ -199,6 +203,8 @@ function injectAndMessage(tab, format, scope) {
       if (chrome.runtime.lastError) {
         console.error('PDF Extract message failed:', chrome.runtime.lastError.message);
         flashBadge('ERR', '#991b1b', tabId);
+      } else if (response && response.success === false) {
+        flashBadge('ERR', '#991b1b', tabId);
       }
     });
   });
@@ -218,5 +224,6 @@ function flashBadge(text, color, tabId) {
 chrome.contextMenus.onClicked.addListener((info, tab) => {
   var config = MENU_MAP[info.menuItemId];
   if (!config) return;
+  if (!tab || !tab.id) return;
   injectAndMessage(tab, config.format, config.scope);
 });

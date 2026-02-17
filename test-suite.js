@@ -1167,6 +1167,358 @@ test('text-extract.js detectRole checks descendant data-message-author-role', ()
 });
 
 // ═══════════════════════════════════════════════════════════════
+// SECTION 13: PRE-RELEASE AUDIT FIX VERIFICATION
+// ═══════════════════════════════════════════════════════════════
+
+console.log('\n--- Section 13a: Extension icons and manifest ---');
+
+test('manifest.json has icons field with 16, 48, 128 sizes', () => {
+  const m = JSON.parse(fs.readFileSync(path.join(EXT, 'manifest.json'), 'utf8'));
+  assert(m.icons, 'Must have icons field');
+  assert(m.icons['16'], 'Must have 16px icon');
+  assert(m.icons['48'], 'Must have 48px icon');
+  assert(m.icons['128'], 'Must have 128px icon');
+});
+
+test('manifest.json action has default_icon', () => {
+  const m = JSON.parse(fs.readFileSync(path.join(EXT, 'manifest.json'), 'utf8'));
+  assert(m.action.default_icon, 'Must have default_icon in action');
+  assert(m.action.default_icon['16'], 'default_icon must have 16px');
+  assert(m.action.default_icon['128'], 'default_icon must have 128px');
+});
+
+test('icon files exist and are valid PNG', () => {
+  for (const size of ['16', '48', '128']) {
+    const iconPath = path.join(EXT, 'icons', 'icon' + size + '.png');
+    assert(fs.existsSync(iconPath), 'Icon ' + size + 'px must exist');
+    const buf = fs.readFileSync(iconPath);
+    // PNG magic bytes: 0x89 0x50 0x4E 0x47
+    assert(buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4E && buf[3] === 0x47,
+      'Icon ' + size + ' must be valid PNG (check magic bytes)');
+    assert(buf.length > 50, 'Icon ' + size + ' must have real content (' + buf.length + ' bytes)');
+  }
+});
+
+console.log('\n--- Section 13b: Keyboard shortcuts do not conflict ---');
+
+test('keyboard shortcuts avoid Ctrl+Shift+C and Ctrl+Shift+T', () => {
+  const m = JSON.parse(fs.readFileSync(path.join(EXT, 'manifest.json'), 'utf8'));
+  for (const cmd of Object.keys(m.commands)) {
+    const key = m.commands[cmd].suggested_key;
+    if (key && key.default) {
+      assert(!key.default.includes('Ctrl+Shift+C'),
+        cmd + ' must NOT use Ctrl+Shift+C (browser Inspect Element)');
+      assert(!key.default.includes('Ctrl+Shift+T'),
+        cmd + ' must NOT use Ctrl+Shift+T (browser Reopen Tab)');
+      assert(!key.default.includes('Ctrl+Shift+I'),
+        cmd + ' must NOT use Ctrl+Shift+I (browser DevTools)');
+      assert(!key.default.includes('Ctrl+Shift+J'),
+        cmd + ' must NOT use Ctrl+Shift+J (browser Console)');
+      assert(!key.default.includes('Ctrl+Shift+N'),
+        cmd + ' must NOT use Ctrl+Shift+N (browser Incognito)');
+    }
+  }
+});
+
+test('popup.html shortcuts hint matches manifest keys', () => {
+  const html = fs.readFileSync(path.join(EXT, 'popup.html'), 'utf8');
+  const m = JSON.parse(fs.readFileSync(path.join(EXT, 'manifest.json'), 'utf8'));
+  // Extract the actual shortcut letters from manifest
+  const copyKey = m.commands['copy-page-text'].suggested_key.default;
+  const txtKey = m.commands['page-to-txt'].suggested_key.default;
+  const pdfKey = m.commands['page-to-pdf'].suggested_key.default;
+  // Shortcuts hint should contain the actual keys
+  assert(html.includes(copyKey), 'Shortcuts hint must show copy key: ' + copyKey);
+  assert(html.includes(txtKey), 'Shortcuts hint must show txt key: ' + txtKey);
+  assert(html.includes(pdfKey), 'Shortcuts hint must show pdf key: ' + pdfKey);
+});
+
+test('popup.html button tooltips match manifest shortcut keys', () => {
+  const html = fs.readFileSync(path.join(EXT, 'popup.html'), 'utf8');
+  const m = JSON.parse(fs.readFileSync(path.join(EXT, 'manifest.json'), 'utf8'));
+  const copyKey = m.commands['copy-page-text'].suggested_key.default;
+  const txtKey = m.commands['page-to-txt'].suggested_key.default;
+  // Buttons that show shortcuts in their title must match manifest
+  const clipPageBtn = html.match(/id="clip-page"[^>]*title="([^"]*)"/);
+  if (clipPageBtn) {
+    assert(clipPageBtn[1].includes(copyKey),
+      'clip-page tooltip must include ' + copyKey + ', got: ' + clipPageBtn[1]);
+  }
+  const txtPageBtn = html.match(/id="txt-page"[^>]*title="([^"]*)"/);
+  if (txtPageBtn) {
+    assert(txtPageBtn[1].includes(txtKey),
+      'txt-page tooltip must include ' + txtKey + ', got: ' + txtPageBtn[1]);
+  }
+});
+
+console.log('\n--- Section 13c: background.js injection parity with popup.js ---');
+
+test('background.js injects html2canvas for pdf format', () => {
+  const js = fs.readFileSync(path.join(EXT, 'background.js'), 'utf8');
+  assert(js.includes('html2canvas.min.js'), 'Must inject html2canvas');
+  assert(js.includes("format === 'pdf'"), 'Must check for pdf format');
+});
+
+test('background.js injects jspdf for both pdf and pdf-typewriter', () => {
+  const js = fs.readFileSync(path.join(EXT, 'background.js'), 'utf8');
+  // Should check for pdf OR pdf-typewriter
+  assert(js.includes("format === 'pdf' || format === 'pdf-typewriter'") ||
+    js.includes("format === 'pdf-typewriter' || format === 'pdf'"),
+    'Must inject jspdf for both pdf formats');
+});
+
+test('background.js and popup.js inject identical library sets per format', () => {
+  const bg = fs.readFileSync(path.join(EXT, 'background.js'), 'utf8');
+  const popup = fs.readFileSync(path.join(EXT, 'popup.js'), 'utf8');
+  // Both must reference the same library files
+  assert(bg.includes('lib/jspdf.umd.min.js'), 'background.js must have jspdf');
+  assert(bg.includes('lib/html2canvas.min.js'), 'background.js must have html2canvas');
+  assert(bg.includes('lib/turndown.js'), 'background.js must have turndown');
+  assert(popup.includes('lib/jspdf.umd.min.js'), 'popup.js must have jspdf');
+  assert(popup.includes('lib/html2canvas.min.js'), 'popup.js must have html2canvas');
+  assert(popup.includes('lib/turndown.js'), 'popup.js must have turndown');
+});
+
+console.log('\n--- Section 13d: Popup waits for content script response ---');
+
+test('popup.js uses sendMessage callback to wait for response', () => {
+  const js = fs.readFileSync(path.join(EXT, 'popup.js'), 'utf8');
+  // Must have a callback in sendMessage
+  assert(js.includes('sendMessage(tabId,') || js.includes('sendMessage(tabId ,'),
+    'Must call sendMessage with tabId');
+  assert(js.includes('function (response)') || js.includes('function(response)'),
+    'Must have response callback in sendMessage');
+});
+
+test('popup.js shows error when content script reports failure', () => {
+  const js = fs.readFileSync(path.join(EXT, 'popup.js'), 'utf8');
+  assert(js.includes('response.success === false') || js.includes('response && response.success'),
+    'Must check response.success for failure');
+  assert(js.includes('response.error'), 'Must display error from response');
+});
+
+test('popup.js shows success only after receiving response', () => {
+  const js = fs.readFileSync(path.join(EXT, 'popup.js'), 'utf8');
+  // Downloaded!/Copied! must appear INSIDE the response callback, not before
+  const callbackIdx = js.indexOf('function (response)') !== -1
+    ? js.indexOf('function (response)')
+    : js.indexOf('function(response)');
+  const successIdx = js.indexOf("'Downloaded!'");
+  assert(callbackIdx > 0, 'Must have response callback');
+  assert(successIdx > callbackIdx,
+    'Success message must appear after response callback start');
+});
+
+test('content.js returns structured response from handleConversion', () => {
+  const js = fs.readFileSync(path.join(EXT, 'content.js'), 'utf8');
+  assert(js.includes('return { success: true'), 'Must return success objects');
+  assert(js.includes('return { success: false'), 'Must return failure objects');
+  assert(js.includes('return true; // keep message channel open'),
+    'Must return true from onMessage to keep channel open for async');
+});
+
+test('content.js sendResponse is called on both success and failure paths', () => {
+  const js = fs.readFileSync(path.join(EXT, 'content.js'), 'utf8');
+  assert(js.includes('sendResponse(result'), 'Must call sendResponse with result');
+  assert(js.includes('sendResponse({ success: false'), 'Must call sendResponse on catch');
+});
+
+console.log('\n--- Section 13e: URL.revokeObjectURL timeout ---');
+
+test('content.js revokeObjectURL uses >= 30s timeout', () => {
+  const js = fs.readFileSync(path.join(EXT, 'content.js'), 'utf8');
+  const match = js.match(/revokeObjectURL.*?(\d+)\s*\)/);
+  assert(match, 'Must have revokeObjectURL with timeout');
+  const ms = parseInt(match[1], 10);
+  assert(ms >= 30000, 'revokeObjectURL timeout must be >= 30s, got ' + ms + 'ms');
+});
+
+console.log('\n--- Section 13f: document.body null check ---');
+
+test('content.js checks document.body before accessing it for page scope', () => {
+  const js = fs.readFileSync(path.join(EXT, 'content.js'), 'utf8');
+  assert(js.includes('!document.body'), 'Must check for null document.body');
+  assert(js.includes('No page content found') || js.includes('not an HTML document'),
+    'Must show error message for missing body');
+});
+
+console.log('\n--- Section 13g: popup.js null safety ---');
+
+test('popup.js checks getElementById result before addEventListener', () => {
+  const js = fs.readFileSync(path.join(EXT, 'popup.js'), 'utf8');
+  // Must have a null check pattern: getElementById -> check -> addEventListener
+  assert(js.includes('if (btn)') || js.includes('if(btn)'),
+    'Must check element exists before adding listener');
+});
+
+test('popup.js checks tabs array before accessing tabs[0]', () => {
+  const js = fs.readFileSync(path.join(EXT, 'popup.js'), 'utf8');
+  assert(js.includes('!tabs || !tabs[0]') || js.includes('!tabs[0]'),
+    'Must check tabs[0] exists');
+});
+
+console.log('\n--- Section 13h: Markdown body sanitization ---');
+
+test('content.js has sanitizeMarkdownBody function', () => {
+  const js = fs.readFileSync(path.join(EXT, 'content.js'), 'utf8');
+  assert(js.includes('sanitizeMarkdownBody'), 'Must have sanitizeMarkdownBody function');
+});
+
+test('content.js calls sanitizeMarkdownBody on markdown output', () => {
+  const js = fs.readFileSync(path.join(EXT, 'content.js'), 'utf8');
+  const mdIdx = js.indexOf("format === 'md'");
+  const mdBlock = js.substring(mdIdx, mdIdx + 500);
+  assert(mdBlock.includes('sanitizeMarkdownBody(markdown)'),
+    'Must call sanitizeMarkdownBody on turndown output');
+});
+
+test('sanitizeMarkdownBody strips invisible chars but preserves Unicode text', () => {
+  // Reproduce sanitizeMarkdownBody to test
+  function sanitizeMarkdownBody(text) {
+    if (!text) return '';
+    text = text.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F\x80-\x9F]/g, '');
+    text = text.replace(/[\u00AD\u034F\u061C\u115F\u1160\u17B4\u17B5\u180B-\u180E\u200B-\u200F\u202A-\u202E\u2060-\u2064\u2066-\u206F\uFE00-\uFE0F\uFEFF\uFFF0-\uFFF8\uFFF9-\uFFFB]/g, '');
+    text = text.replace(/[\uD800-\uDFFF]/g, '');
+    text = text.replace(/\r\n/g, '\n');
+    text = text.replace(/\r/g, '\n');
+    return text;
+  }
+  // Should strip invisibles
+  const dirty = '# Hello\u200B World\uFEFF\n\nCaf\u00E9 \u00FCber \u2014 dash';
+  const clean = sanitizeMarkdownBody(dirty);
+  assert(clean === '# Hello World\n\nCaf\u00E9 \u00FCber \u2014 dash',
+    'Must strip invisibles but keep Unicode: got ' + JSON.stringify(clean));
+  // Should preserve accented characters
+  assert(clean.includes('\u00E9'), 'Must preserve accented e');
+  assert(clean.includes('\u00FC'), 'Must preserve umlaut u');
+  // Should preserve em dash (markdown allows it)
+  assert(clean.includes('\u2014'), 'Must preserve em dash in markdown');
+  // Should strip control chars
+  assert(sanitizeMarkdownBody('a\x00b\x01c') === 'abc', 'Must strip control chars');
+  // Should normalize line endings
+  assert(sanitizeMarkdownBody('a\r\nb\rc') === 'a\nb\nc', 'Must normalize CRLF');
+});
+
+console.log('\n--- Section 13i: Background.js error feedback ---');
+
+test('background.js has flashBadge function for error feedback', () => {
+  const js = fs.readFileSync(path.join(EXT, 'background.js'), 'utf8');
+  assert(js.includes('flashBadge'), 'Must have flashBadge function');
+  assert(js.includes('setBadgeText'), 'Must use chrome.action.setBadgeText');
+  assert(js.includes('setBadgeBackgroundColor'), 'Must set badge color');
+});
+
+test('background.js flashes badge on injection failure', () => {
+  const js = fs.readFileSync(path.join(EXT, 'background.js'), 'utf8');
+  // After lastError check, must flash badge
+  const errorIdx = js.indexOf('PDF Extract injection failed');
+  assert(errorIdx > 0, 'Must log injection failure');
+  const afterError = js.substring(errorIdx, errorIdx + 200);
+  assert(afterError.includes('flashBadge'), 'Must flash badge on injection failure');
+});
+
+test('background.js flashes badge on blocked URL', () => {
+  const js = fs.readFileSync(path.join(EXT, 'background.js'), 'utf8');
+  // URL blocklist section must flash badge
+  const blockIdx = js.indexOf("url.startsWith('brave://')");
+  const blockEnd = js.indexOf('var files', blockIdx);
+  const blockSection = js.substring(blockIdx, blockEnd);
+  assert(blockSection.includes('flashBadge'), 'Must flash badge when URL is blocked');
+});
+
+test('background.js blocks additional URL schemes (view-source, data, blob)', () => {
+  const js = fs.readFileSync(path.join(EXT, 'background.js'), 'utf8');
+  assert(js.includes("view-source:"), 'Must block view-source: URLs');
+  assert(js.includes("'data:'") || js.includes("data:"), 'Must block data: URLs');
+  assert(js.includes("'blob:'") || js.includes("blob:"), 'Must block blob: URLs');
+});
+
+console.log('\n--- Section 13j: popup.html accessibility ---');
+
+test('popup.html has lang attribute on html element', () => {
+  const html = fs.readFileSync(path.join(EXT, 'popup.html'), 'utf8');
+  assert(html.includes('lang="en"') || html.includes("lang='en'"),
+    'Must have lang="en" on html element for accessibility');
+});
+
+// ═══════════════════════════════════════════════════════════════
+// SECTION 14: REGRESSION FIX VERIFICATION
+// ═══════════════════════════════════════════════════════════════
+
+console.log('\n--- Section 14a: Brave fallback returns recursive result ---');
+
+test('content.js Brave canvas fallbacks use return (not fire-and-forget)', () => {
+  const js = fs.readFileSync(path.join(EXT, 'content.js'), 'utf8');
+  // Both Brave fallback paths must return the recursive handleConversion call
+  // so the promise chain propagates the result back to sendResponse
+  assert(js.includes('return handleConversion(format, scope);'),
+    'Brave fallback must return the recursive handleConversion call');
+  // Must NOT have fire-and-forget pattern (handleConversion followed by bare return)
+  assert(!js.includes('handleConversion(format, scope);\n        return;'),
+    'Must NOT have fire-and-forget handleConversion followed by bare return');
+});
+
+console.log('\n--- Section 14b: showNotice guards document.body ---');
+
+test('content.js showNotice guards against null document.body', () => {
+  const js = fs.readFileSync(path.join(EXT, 'content.js'), 'utf8');
+  const fnStart = js.indexOf('function showNotice');
+  const fnBlock = js.substring(fnStart, fnStart + 200);
+  assert(fnBlock.includes('!document.body'),
+    'showNotice must check document.body before appendChild');
+});
+
+console.log('\n--- Section 14c: Popup sendMessage timeout safety ---');
+
+test('popup.js has timeout safety net for sendMessage', () => {
+  const js = fs.readFileSync(path.join(EXT, 'popup.js'), 'utf8');
+  assert(js.includes('safetyTimer') || js.includes('timeout') || js.includes('timed out'),
+    'Must have a timeout safety net for sendMessage callback');
+  assert(js.includes('clearTimeout'), 'Must clear timeout on successful response');
+});
+
+test('popup.js URL blocklist includes view-source, data, blob', () => {
+  const js = fs.readFileSync(path.join(EXT, 'popup.js'), 'utf8');
+  assert(js.includes("view-source:"), 'popup.js must block view-source: URLs');
+  assert(js.includes("data:"), 'popup.js must block data: URLs');
+  assert(js.includes("blob:"), 'popup.js must block blob: URLs');
+});
+
+test('popup.js and background.js URL blocklists are in sync', () => {
+  const popup = fs.readFileSync(path.join(EXT, 'popup.js'), 'utf8');
+  const bg = fs.readFileSync(path.join(EXT, 'background.js'), 'utf8');
+  const schemes = ['brave://', 'chrome://', 'edge://', 'about:',
+    'chrome-extension://', 'devtools://', 'view-source:', 'data:', 'blob:'];
+  for (const scheme of schemes) {
+    assert(popup.includes(scheme), 'popup.js missing blocklist scheme: ' + scheme);
+    assert(bg.includes(scheme), 'background.js missing blocklist scheme: ' + scheme);
+  }
+});
+
+console.log('\n--- Section 14d: Background.js response check and tab guard ---');
+
+test('background.js checks response.success in sendMessage callback', () => {
+  const js = fs.readFileSync(path.join(EXT, 'background.js'), 'utf8');
+  assert(js.includes('response.success === false') || js.includes('response && response.success'),
+    'background.js must check response.success for content-level failures');
+});
+
+test('background.js validates tab in context menu handler', () => {
+  const js = fs.readFileSync(path.join(EXT, 'background.js'), 'utf8');
+  const menuHandler = js.substring(js.indexOf('contextMenus.onClicked'));
+  assert(menuHandler.includes('!tab') || menuHandler.includes('!tab.id'),
+    'Context menu handler must validate tab parameter');
+});
+
+test('background.js clears stale badges at start of injectAndMessage', () => {
+  const js = fs.readFileSync(path.join(EXT, 'background.js'), 'utf8');
+  const fnStart = js.indexOf('function injectAndMessage');
+  const fnBlock = js.substring(fnStart, fnStart + 400);
+  assert(fnBlock.includes("setBadgeText({ text: ''"),
+    'injectAndMessage must clear stale badge at start');
+});
+
+// ═══════════════════════════════════════════════════════════════
 // RESULTS
 // ═══════════════════════════════════════════════════════════════
 
