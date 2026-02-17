@@ -1,26 +1,39 @@
-if (!window.hasPDFConverterListener) {
-  window.hasPDFConverterListener = true;
+/**
+ * content.js
+ *
+ * Orchestrates conversion for all formats.
+ * Delegates pure text extraction to text-extract.js.
+ */
 
-  chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+if (!window.__contentConverterLoaded) {
+  window.__contentConverterLoaded = true;
+
+  chrome.runtime.onMessage.addListener(function (request, sender, sendResponse) {
     if (request.action === 'convert') {
-      const { format, scope } = request;
-      handleConversion(format, scope);
+      handleConversion(request.format, request.scope);
     }
   });
 }
 
 async function handleConversion(format, scope) {
-  let element;
-  let htmlContent;
-  let textContent;
+  var element;
+  var htmlContent;
+  var textContent;
 
   if (scope === 'selection') {
-    const selection = window.getSelection();
-    if (selection.rangeCount > 0) {
-      const container = document.createElement('div');
-      container.appendChild(selection.getRangeAt(0).cloneContents());
+    var selection = window.getSelection();
+    if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
+      alert('No text selected. Please select some content first.');
+      return;
+    }
 
-      // For html2canvas
+    var container = document.createElement('div');
+    for (var i = 0; i < selection.rangeCount; i++) {
+      container.appendChild(selection.getRangeAt(i).cloneContents());
+    }
+
+    // For screenshot PDF: append to DOM for html2canvas rendering
+    if (format === 'pdf') {
       container.style.position = 'fixed';
       container.style.left = '0';
       container.style.top = '0';
@@ -28,122 +41,130 @@ async function handleConversion(format, scope) {
       container.style.zIndex = '-9999';
       container.style.backgroundColor = 'white';
       container.style.color = 'black';
-
       document.body.appendChild(container);
       element = container;
-      htmlContent = container.innerHTML;
-      textContent = container.innerText; // Extract text for pure text modes
-      element.isTemp = true;
-    } else {
-      alert('No selection found.');
-      return;
+      element._isTemp = true;
     }
+
+    htmlContent = container.innerHTML;
+
+    // Use deep extraction engine for selections too
+    if (typeof extractPureText === 'function') {
+      textContent = extractPureText(container);
+    } else {
+      textContent = container.innerText || container.textContent || '';
+    }
+
   } else {
     element = document.body;
     htmlContent = document.body.innerHTML;
-    // Clone body to safely manipulate for text extraction without affecting display
-    const clone = document.body.cloneNode(true);
-    // Remove scripts and styles to ensure pure text
-    const scripts = clone.querySelectorAll('script, style, noscript');
-    scripts.forEach(node => node.remove());
-    textContent = clone.innerText;
+
+    // Use the deep extraction engine
+    if (typeof extractPureText === 'function') {
+      textContent = extractPureText(document.body);
+    } else {
+      // Fallback if text-extract.js did not load
+      var clone = document.body.cloneNode(true);
+      clone.querySelectorAll('script, style, noscript').forEach(function (n) { n.remove(); });
+      textContent = clone.innerText || '';
+    }
   }
 
-  const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+  // Build filename from page title
+  var title = document.title
+    .replace(/[^a-zA-Z0-9 _-]/g, '')
+    .replace(/\s+/g, '_')
+    .substring(0, 60)
+    || 'extract';
+  var timestamp = new Date().toISOString().slice(0, 19).replace(/[:.]/g, '-');
 
   try {
-    if (format === 'pdf') { // Screenshot PDF
-        const filename = `capture-${timestamp}.pdf`;
-        const canvas = await html2canvas(element, {
-            useCORS: true,
-            logging: false
-        });
+    if (format === 'txt') {
+      var txtFilename = title + '_' + timestamp + '.txt';
+      downloadFile(txtFilename, textContent, 'text/plain;charset=utf-8');
 
-        const imgData = canvas.toDataURL('image/png');
-        const { jsPDF } = window.jspdf;
-        const imgWidth = 210;
-        const pageHeight = 297;
-        const imgHeight = canvas.height * imgWidth / canvas.width;
-        let heightLeft = imgHeight;
+    } else if (format === 'pdf-typewriter') {
+      var twFilename = title + '_typewriter_' + timestamp + '.pdf';
+      var jsPDFConstructor = window.jspdf.jsPDF;
+      var doc = new jsPDFConstructor({ orientation: 'p', unit: 'mm', format: 'a4' });
 
-        const doc = new jsPDF('p', 'mm', 'a4');
-        let position = 0;
+      doc.setFont('Courier', 'normal');
+      doc.setFontSize(11);
 
-        doc.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
-        heightLeft -= pageHeight;
+      var margin = { top: 25, bottom: 25, left: 20, right: 20 };
+      var contentWidth = 210 - margin.left - margin.right;
+      var lineHeight = 5.5;
+      var lines = doc.splitTextToSize(textContent, contentWidth);
+      var y = margin.top;
 
-        while (heightLeft >= 0) {
-          position -= pageHeight;
+      for (var li = 0; li < lines.length; li++) {
+        if (y + lineHeight > 297 - margin.bottom) {
           doc.addPage();
-          doc.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
-          heightLeft -= pageHeight;
+          y = margin.top;
         }
-        doc.save(filename);
+        doc.text(lines[li], margin.left, y);
+        y += lineHeight;
+      }
 
-    } else if (format === 'pdf-typewriter') { // Typewriter PDF
-        const filename = `typewriter-${timestamp}.pdf`;
-        const { jsPDF } = window.jspdf;
-        const doc = new jsPDF({
-            orientation: 'p',
-            unit: 'mm',
-            format: 'a4'
-        });
+      doc.save(twFilename);
 
-        doc.setFont("Courier", "normal");
-        doc.setFontSize(12);
+    } else if (format === 'pdf') {
+      var pdfFilename = title + '_screenshot_' + timestamp + '.pdf';
+      var canvas = await html2canvas(element, {
+        useCORS: true,
+        logging: false
+      });
 
-        const pageHeight = 297;
-        const topMargin = 20;
-        const bottomMargin = 20;
-        const leftMargin = 20;
-        const rightMargin = 20;
-        const contentWidth = 210 - leftMargin - rightMargin;
-        const lineHeight = 7; // Approx line height for 12pt
+      var imgData = canvas.toDataURL('image/png');
+      var jsPDFCtor = window.jspdf.jsPDF;
+      var imgWidth = 210;
+      var pageHeight = 297;
+      var imgHeight = canvas.height * imgWidth / canvas.width;
+      var heightLeft = imgHeight;
 
-        const splitText = doc.splitTextToSize(textContent, contentWidth);
+      var pdfDoc = new jsPDFCtor('p', 'mm', 'a4');
+      var position = 0;
 
-        let cursorY = topMargin;
+      pdfDoc.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+      heightLeft -= pageHeight;
 
-        for (let i = 0; i < splitText.length; i++) {
-            if (cursorY + lineHeight > pageHeight - bottomMargin) {
-                doc.addPage();
-                cursorY = topMargin;
-            }
-            doc.text(splitText[i], leftMargin, cursorY);
-            cursorY += lineHeight;
-        }
+      while (heightLeft >= 0) {
+        position -= pageHeight;
+        pdfDoc.addPage();
+        pdfDoc.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+        heightLeft -= pageHeight;
+      }
 
-        doc.save(filename);
+      pdfDoc.save(pdfFilename);
 
     } else if (format === 'md') {
-        const filename = `capture-${timestamp}.md`;
-        const turndownService = new TurndownService();
-        const markdown = turndownService.turndown(htmlContent);
-        downloadFile(filename, markdown, 'text/markdown');
+      var mdFilename = title + '_' + timestamp + '.md';
+      var turndownService = new TurndownService();
+      var markdown = turndownService.turndown(htmlContent);
+      downloadFile(mdFilename, markdown, 'text/markdown;charset=utf-8');
 
-    } else if (format === 'txt') {
-        const filename = `capture-${timestamp}.txt`;
-        downloadFile(filename, textContent, 'text/plain');
+    } else {
+      alert('Unknown format: ' + format);
     }
 
   } catch (e) {
-      console.error('Conversion failed', e);
-      alert('Conversion failed: ' + e.message);
+    console.error('Conversion failed:', e);
+    alert('Conversion failed: ' + e.message);
   } finally {
-      if (element && element.isTemp) {
-          element.remove();
-      }
+    if (element && element._isTemp) {
+      element.remove();
+    }
   }
 }
 
 function downloadFile(filename, content, mimeType) {
-    const blob = new Blob([content], { type: mimeType });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+  var blob = new Blob([content], { type: mimeType });
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 }

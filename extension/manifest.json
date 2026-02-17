@@ -1,14 +1,14 @@
 {
   "manifest_version": 3,
-  "name": "Webpage to PDF/MD Converter",
-  "version": "1.0",
-  "description": "Convert webpage or selected area to PDF, Markdown or Plain Text.",
+  "name": "Pure Text & PDF Extractor",
+  "version": "2.0",
+  "description": "Extract pure typewriter-grade text, PDF, or Markdown from any webpage, chat thread, canvas, or code block.",
   "permissions": [
     "activeTab",
     "scripting"
   ],
   "action": {
     "default_popup": "popup.html",
-    "default_title": "Convert Page"
+    "default_title": "Extract Content"
   }
 }
