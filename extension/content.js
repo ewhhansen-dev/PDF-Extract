@@ -10,7 +10,12 @@ if (!window.__contentConverterLoaded) {
 
   chrome.runtime.onMessage.addListener(function (request, sender, sendResponse) {
     if (request.action === 'convert') {
-      handleConversion(request.format, request.scope);
+      handleConversion(request.format, request.scope).then(function (result) {
+        sendResponse(result || { success: true });
+      }).catch(function (err) {
+        sendResponse({ success: false, error: err.message || String(err) });
+      });
+      return true; // keep message channel open for async response
     }
   });
 }
@@ -23,8 +28,9 @@ async function handleConversion(format, scope) {
   if (scope === 'selection') {
     var selection = window.getSelection();
     if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
-      showNotice('No text selected. Please select some content first.', 'warn');
-      return;
+      var noSelMsg = 'No text selected. Please select some content first.';
+      showNotice(noSelMsg, 'warn');
+      return { success: false, error: noSelMsg };
     }
 
     var container = document.createElement('div');
@@ -57,8 +63,9 @@ async function handleConversion(format, scope) {
   } else if (scope === 'modal') {
     var modalEl = findActiveModal();
     if (!modalEl) {
-      showNotice('No popup, modal, or preview window detected on this page.', 'warn');
-      return;
+      var noModalMsg = 'No popup, modal, or preview window detected on this page.';
+      showNotice(noModalMsg, 'warn');
+      return { success: false, error: noModalMsg };
     }
 
     element = modalEl;
@@ -71,6 +78,11 @@ async function handleConversion(format, scope) {
     }
 
   } else {
+    if (!document.body) {
+      var noBodyMsg = 'No page content found. The page may still be loading or is not an HTML document.';
+      showNotice(noBodyMsg, 'error');
+      return { success: false, error: noBodyMsg };
+    }
     element = document.body;
     htmlContent = document.body.innerHTML;
 
@@ -85,8 +97,9 @@ async function handleConversion(format, scope) {
 
   // --- EMPTY EXTRACTION GUARD ---
   if (!textContent || textContent.trim().length === 0) {
-    showNotice('No extractable text found on this page. The content may be dynamically loaded or protected.', 'error');
-    return;
+    var emptyMsg = 'No extractable text found on this page. The content may be dynamically loaded or protected.';
+    showNotice(emptyMsg, 'error');
+    return { success: false, error: emptyMsg };
   }
 
   // --- SMART FILENAME ---
@@ -104,7 +117,7 @@ async function handleConversion(format, scope) {
     if (format === 'clipboard') {
       await copyToClipboard(textContent);
       showCopyNotice();
-      return;
+      return { success: true, action: 'clipboard' };
     }
 
     if (format === 'txt') {
@@ -212,6 +225,7 @@ async function handleConversion(format, scope) {
       var mdFilename = smartName + '_' + timestamp + '.md';
       var turndownService = new TurndownService();
       var markdown = turndownService.turndown(htmlContent);
+      markdown = sanitizeMarkdownBody(markdown);
       var mdHeader = '<!--\n' +
         'Title:  ' + sanitizeHeaderField(document.title) + '\n' +
         'URL:    ' + sanitizeHeaderField(window.location.href) + '\n' +
@@ -221,12 +235,18 @@ async function handleConversion(format, scope) {
       downloadFile(mdFilename, mdHeader + markdown, 'text/markdown;charset=utf-8');
 
     } else {
-      showNotice('Unknown format: ' + format, 'error');
+      var unknownMsg = 'Unknown format: ' + format;
+      showNotice(unknownMsg, 'error');
+      return { success: false, error: unknownMsg };
     }
+
+    return { success: true, action: format };
 
   } catch (e) {
     console.error('Conversion failed:', e);
-    showNotice('Conversion failed: ' + e.message, 'error');
+    var failMsg = 'Conversion failed: ' + e.message;
+    showNotice(failMsg, 'error');
+    return { success: false, error: failMsg };
   } finally {
     if (element && element._isTemp) {
       element.remove();
@@ -286,6 +306,22 @@ function sanitizeHeaderField(str) {
   // Final filter: keep only printable ASCII (space through tilde) plus tab/newline
   str = str.replace(/[^\x20-\x7E\t\n]/g, '');
   return str.trim();
+}
+
+// Sanitize markdown body: strip invisible/control characters while preserving
+// legitimate Unicode text (accented chars, emoji, CJK, etc.)
+function sanitizeMarkdownBody(text) {
+  if (!text) return '';
+  // Strip C0/C1 control characters except tab, newline, carriage return
+  text = text.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F\x80-\x9F]/g, '');
+  // Strip zero-width and invisible formatting characters
+  text = text.replace(/[\u00AD\u034F\u061C\u115F\u1160\u17B4\u17B5\u180B-\u180E\u200B-\u200F\u202A-\u202E\u2060-\u2064\u2066-\u206F\uFE00-\uFE0F\uFEFF\uFFF0-\uFFF8\uFFF9-\uFFFB]/g, '');
+  // Strip orphaned surrogate halves
+  text = text.replace(/[\uD800-\uDFFF]/g, '');
+  // Normalize carriage returns
+  text = text.replace(/\r\n/g, '\n');
+  text = text.replace(/\r/g, '\n');
+  return text;
 }
 
 function buildInfoHeader(title, url, scopeLabel, format) {
@@ -391,7 +427,7 @@ function downloadFile(filename, content, mimeType) {
   // Non-bubbling click bypasses React/Vue/Angular event delegation
   a.dispatchEvent(new MouseEvent('click', { bubbles: false, cancelable: true, view: window }));
   document.body.removeChild(a);
-  setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+  setTimeout(function () { URL.revokeObjectURL(url); }, 60000);
 }
 
 // --- MODAL / POPUP / PREVIEW DETECTION ---

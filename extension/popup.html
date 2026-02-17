@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <link rel="stylesheet" href="popup.css">
@@ -9,14 +9,14 @@
 
   <div class="button-group clipboard-group">
     <h4>Copy to Clipboard</h4>
-    <button id="clip-page" title="Copy purified text from the entire page to clipboard (Ctrl+Shift+C)">Copy Page Text</button>
+    <button id="clip-page" title="Copy purified text from the entire page to clipboard (Ctrl+Shift+Y)">Copy Page Text</button>
     <button id="clip-selection" title="Copy purified text from your highlighted selection to clipboard">Copy Selection Text</button>
     <button id="clip-modal" title="Copy purified text from an open popup, modal, or preview window to clipboard">Copy Popup Text</button>
   </div>
 
   <div class="button-group primary">
     <h4>Pure Text (Typewriter)</h4>
-    <button id="txt-page" title="Download entire page as a clean .txt file with metadata header (Ctrl+Shift+T)">Page to .txt</button>
+    <button id="txt-page" title="Download entire page as a clean .txt file with metadata header (Ctrl+Shift+U)">Page to .txt</button>
     <button id="txt-selection" title="Download your highlighted selection as a clean .txt file">Selection to .txt</button>
     <button id="pdf-typewriter-page" title="Download page as a text PDF in Courier font - selectable and searchable (Ctrl+Shift+E)">Page to Typewriter PDF</button>
     <button id="pdf-typewriter-selection" title="Download selection as a searchable text PDF in Courier font">Selection to Typewriter PDF</button>
@@ -40,7 +40,7 @@
 
   <div id="status-msg" style="display:none;"></div>
   <div id="error-msg" style="display:none;"></div>
-  <div class="shortcuts-hint">Ctrl+Shift+C copy | Ctrl+Shift+T .txt | Ctrl+Shift+E pdf</div>
+  <div class="shortcuts-hint">Ctrl+Shift+Y copy | Ctrl+Shift+U .txt | Ctrl+Shift+E pdf</div>
   <script src="popup.js"></script>
 </body>
 </html>

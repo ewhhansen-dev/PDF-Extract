@@ -17,9 +17,12 @@ const buttons = {
 };
 
 for (const [id, config] of Object.entries(buttons)) {
-  document.getElementById(id).addEventListener('click', () => {
-    injectAndRun(config.format, config.scope);
-  });
+  var btn = document.getElementById(id);
+  if (btn) {
+    btn.addEventListener('click', () => {
+      injectAndRun(config.format, config.scope);
+    });
+  }
 }
 
 function showStatus(msg, type) {
@@ -47,6 +50,10 @@ function injectAndRun(format, scope) {
   if (errEl) errEl.style.display = 'none';
 
   chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+    if (!tabs || !tabs[0]) {
+      showError('No active tab found.');
+      return;
+    }
     const tab = tabs[0];
     const tabId = tab.id;
     const url = tab.url || '';
@@ -98,10 +105,19 @@ function injectAndRun(format, scope) {
         action: 'convert',
         format: format,
         scope: scope
+      }, function (response) {
+        if (chrome.runtime.lastError) {
+          showError('Could not communicate with page: ' + (chrome.runtime.lastError.message || ''));
+          return;
+        }
+        if (response && response.success === false) {
+          showError(response.error || 'Conversion failed.');
+          return;
+        }
+        var successLabel = format === 'clipboard' ? 'Copied!' : 'Downloaded!';
+        showStatus(successLabel, 'success');
+        setTimeout(function () { window.close(); }, 900);
       });
-      var successLabel = format === 'clipboard' ? 'Copied!' : 'Downloaded!';
-      showStatus(successLabel, 'success');
-      setTimeout(function () { window.close(); }, 900);
     });
   });
 }

@@ -162,13 +162,19 @@ function injectAndMessage(tab, format, scope) {
 
   if (url.startsWith('brave://') || url.startsWith('chrome://') ||
       url.startsWith('edge://') || url.startsWith('about:') ||
-      url.startsWith('chrome-extension://') || url.startsWith('devtools://')) {
+      url.startsWith('chrome-extension://') || url.startsWith('devtools://') ||
+      url.startsWith('view-source:') || url.startsWith('data:') ||
+      url.startsWith('blob:')) {
+    flashBadge('ERR', '#991b1b', tabId);
     return;
   }
 
   var files = [];
-  if (format === 'pdf-typewriter') {
+  if (format === 'pdf' || format === 'pdf-typewriter') {
     files.push('lib/jspdf.umd.min.js');
+  }
+  if (format === 'pdf') {
+    files.push('lib/html2canvas.min.js');
   }
   if (format === 'md') {
     files.push('lib/turndown.js');
@@ -182,14 +188,29 @@ function injectAndMessage(tab, format, scope) {
   }, () => {
     if (chrome.runtime.lastError) {
       console.error('PDF Extract injection failed:', chrome.runtime.lastError.message);
+      flashBadge('ERR', '#991b1b', tabId);
       return;
     }
     chrome.tabs.sendMessage(tabId, {
       action: 'convert',
       format: format,
       scope: scope
+    }, function (response) {
+      if (chrome.runtime.lastError) {
+        console.error('PDF Extract message failed:', chrome.runtime.lastError.message);
+        flashBadge('ERR', '#991b1b', tabId);
+      }
     });
   });
+}
+
+// Brief badge flash for error/success feedback from context menu and keyboard shortcuts
+function flashBadge(text, color, tabId) {
+  chrome.action.setBadgeText({ text: text, tabId: tabId });
+  chrome.action.setBadgeBackgroundColor({ color: color, tabId: tabId });
+  setTimeout(function () {
+    chrome.action.setBadgeText({ text: '', tabId: tabId });
+  }, 3000);
 }
 
 // --- CONTEXT MENU CLICK HANDLER ---
