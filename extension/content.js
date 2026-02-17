@@ -21,6 +21,12 @@ if (!window.__contentConverterLoaded) {
 }
 
 async function handleConversion(format, scope) {
+  // Debounce: prevent multiple concurrent invocations from double-clicks,
+  // rapid keyboard shortcuts, or context menu spam
+  if (window.__conversionInProgress) {
+    return { success: false, error: 'Conversion already in progress.' };
+  }
+  window.__conversionInProgress = true;
   var element;
   var htmlContent;
   var textContent;
@@ -246,6 +252,7 @@ async function handleConversion(format, scope) {
     showNotice(failMsg, 'error');
     return { success: false, error: failMsg };
   } finally {
+    window.__conversionInProgress = false;
     if (element && element._isTemp) {
       element.remove();
     }
@@ -280,6 +287,11 @@ function buildSmartFilename(textContent) {
       .replace(/\s+/g, '_')
       .substring(0, 60)
       || 'extract';
+  }
+
+  // Guard against Windows reserved filenames (CON, PRN, AUX, NUL, COM1-9, LPT1-9)
+  if (/^(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])$/i.test(name)) {
+    name = '_' + name;
   }
 
   return name;

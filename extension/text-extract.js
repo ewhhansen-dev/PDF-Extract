@@ -135,6 +135,18 @@
     '[class*="comment-body"]'
   ];
 
+  // --- BLOCK ELEMENT LOOKUP (hoisted for performance) ---
+  // Used by processNode on every element during tree walk.
+  // Hoisting avoids re-creating this object on each call.
+  var BLOCK_ELEMENTS = {
+    'div':1, 'p':1, 'section':1, 'article':1, 'main':1, 'aside':1,
+    'blockquote':1, 'figure':1, 'figcaption':1, 'details':1, 'summary':1,
+    'ul':1, 'ol':1, 'li':1, 'dl':1, 'dt':1, 'dd':1,
+    'table':1, 'thead':1, 'tbody':1, 'tfoot':1, 'tr':1,
+    'h1':1, 'h2':1, 'h3':1, 'h4':1, 'h5':1, 'h6':1,
+    'address':1, 'fieldset':1, 'pre':1
+  };
+
   // --- CODE BLOCK DETECTION ---
 
   var CODE_BLOCK_SELECTORS = [
@@ -254,35 +266,60 @@
   // --- PHASE 1: REMOVE NON-CONTENT ---
 
   function removeNonContent(root) {
-    var i, els, tag, sel;
+    var i, els;
 
-    // Remove by tag name
-    for (i = 0; i < REMOVE_TAGS.length; i++) {
-      tag = REMOVE_TAGS[i];
-      els = root.querySelectorAll(tag);
-      els.forEach(function (el) { el.remove(); });
-    }
+    // Remove by tag name (single comma-joined selector for all tags)
+    els = root.querySelectorAll(REMOVE_TAGS.join(','));
+    els.forEach(function (el) { el.remove(); });
 
-    // Remove by selector
-    for (i = 0; i < REMOVE_SELECTORS.length; i++) {
-      sel = REMOVE_SELECTORS[i];
+    // Remove by selector in batches of BATCH_SIZE to reduce DOM traversals.
+    // Individual try/catch per batch: if one selector is invalid, only that
+    // batch falls back to individual queries.
+    var BATCH_SIZE = 6;
+    for (i = 0; i < REMOVE_SELECTORS.length; i += BATCH_SIZE) {
+      var batch = REMOVE_SELECTORS.slice(i, i + BATCH_SIZE);
       try {
-        els = root.querySelectorAll(sel);
+        els = root.querySelectorAll(batch.join(','));
         els.forEach(function (el) { el.remove(); });
       } catch (e) {
-        // Invalid selector on this page context - skip
+        // A selector in this batch is invalid; fall back to one-by-one
+        for (var j = 0; j < batch.length; j++) {
+          try {
+            els = root.querySelectorAll(batch[j]);
+            els.forEach(function (el) { el.remove(); });
+          } catch (e2) { /* skip invalid */ }
+        }
       }
     }
   }
 
   // --- PHASE 2: REMOVE HIDDEN ELEMENTS ---
 
+  // Common CSS framework classes that hide content.
+  // Since we operate on a cloned (detached) DOM, getComputedStyle won't work,
+  // so we catch the most common hide-by-class patterns explicitly.
+  var HIDDEN_CLASS_SELECTORS = [
+    '.hidden', '.d-none', '.d-hide', '.is-hidden', '.is-invisible',
+    '.collapse:not(.show)', '.invisible',
+    '[style*="display: none"]', '[style*="display:none"]',
+    '[style*="visibility: hidden"]', '[style*="visibility:hidden"]'
+  ];
+
   function removeHiddenElements(root) {
+    var i, els, el, style;
+
+    // First pass: remove elements hidden by common CSS framework classes
+    for (i = 0; i < HIDDEN_CLASS_SELECTORS.length; i++) {
+      try {
+        els = root.querySelectorAll(HIDDEN_CLASS_SELECTORS[i]);
+        els.forEach(function (e) { e.remove(); });
+      } catch (e) { /* skip invalid */ }
+    }
+
+    // Second pass: catch inline style hiding not covered by attribute selectors
     var allElements = root.querySelectorAll('*');
-    var el, style;
-    for (var i = 0; i < allElements.length; i++) {
+    for (i = 0; i < allElements.length; i++) {
       el = allElements[i];
-      // Check if element still in DOM (parent may have been removed)
       if (!el.parentNode) continue;
       style = el.style;
       if (
@@ -533,15 +570,7 @@
   }
 
   function isBlockElement(tag) {
-    var blocks = {
-      'div':1, 'p':1, 'section':1, 'article':1, 'main':1, 'aside':1,
-      'blockquote':1, 'figure':1, 'figcaption':1, 'details':1, 'summary':1,
-      'ul':1, 'ol':1, 'li':1, 'dl':1, 'dt':1, 'dd':1,
-      'table':1, 'thead':1, 'tbody':1, 'tfoot':1, 'tr':1,
-      'h1':1, 'h2':1, 'h3':1, 'h4':1, 'h5':1, 'h6':1,
-      'address':1, 'fieldset':1, 'pre':1
-    };
-    return blocks.hasOwnProperty(tag);
+    return BLOCK_ELEMENTS.hasOwnProperty(tag);
   }
 
   // --- PHASE 5: OUTPUT SANITIZATION ---

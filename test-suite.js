@@ -606,15 +606,17 @@ console.log('\n--- Section 5: Byte-level output purity simulation ---');
 // We simulate the sanitizeOutput function in Node.js to verify
 // that output bytes are clean.
 
-// Reproduce the sanitization logic
+// Reproduce the sanitization logic (must match text-extract.js sanitizeOutput exactly)
 function sanitizeOutput(text) {
-  // Control chars except \t \n \r
+  // Step 1: Control chars except \t \n \r
   text = text.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F\x80-\x9F]/g, '');
-  // Invisible Unicode
+  // Step 2: Invisible Unicode
   text = text.replace(/[\u00AD\u034F\u061C\u115F\u1160\u17B4\u17B5\u180B-\u180E\u200B-\u200F\u202A-\u202E\u2060-\u2064\u2066-\u206F\uFE00-\uFE0F\uFEFF\uFFF0-\uFFF8\uFFF9-\uFFFB]/g, '');
-  // Surrogate halves
+  // Step 3: Surrogate halves
   text = text.replace(/[\uD800-\uDFFF]/g, '');
-  // Unicode typography to ASCII
+  // Step 4: Astral plane invisibles (Tags, VS Supplement, Shorthand Format Controls)
+  text = stripAstralInvisibles(text);
+  // Step 5: Unicode typography to ASCII
   text = text.replace(/[\u2018\u2019\u201A\u201B\u2032]/g, "'");
   text = text.replace(/[\u201C\u201D\u201E\u201F\u2033]/g, '"');
   text = text.replace(/[\u2013\u2014\u2015\u2212]/g, '-');
@@ -623,16 +625,63 @@ function sanitizeOutput(text) {
   text = text.replace(/[\u00A0\u2000-\u200A\u202F\u205F\u3000]/g, ' ');
   text = text.replace(/\u2044/g, '/');
   text = text.replace(/[\u2010\u2011\u2012\uFE58\uFE63\uFF0D]/g, '-');
-  // Normalize line endings
+  // Step 6: Normalize line endings
   text = text.replace(/\r\n/g, '\n');
   text = text.replace(/\r/g, '\n');
-  // Collapse spaces
+  // Step 7-10: Collapse spaces and blank lines
   text = text.replace(/[^\S\n]+/g, ' ');
   text = text.replace(/ +$/gm, '');
   text = text.replace(/^ +/gm, '');
   text = text.replace(/\n{4,}/g, '\n\n\n');
+  // Step 11-12: Trim and trailing newline
   text = text.trim() + '\n';
+  // Step 13: Final printable filter
+  text = filterToPrintable(text);
   return text;
+}
+
+function stripAstralInvisibles(text) {
+  var result = '';
+  var i = 0;
+  while (i < text.length) {
+    var cp = text.codePointAt(i);
+    if ((cp >= 0xE0001 && cp <= 0xE007F) ||
+        (cp >= 0xE0100 && cp <= 0xE01EF) ||
+        (cp >= 0x1BCA0 && cp <= 0x1BCA3)) {
+      i += 2;
+      continue;
+    }
+    if (cp > 0xFFFF) {
+      result += text.charAt(i) + text.charAt(i + 1);
+      i += 2;
+    } else {
+      result += text.charAt(i);
+      i += 1;
+    }
+  }
+  return result;
+}
+
+function filterToPrintable(text) {
+  var result = '';
+  var i = 0;
+  while (i < text.length) {
+    var cp = text.codePointAt(i);
+    if (cp === 0x09 || cp === 0x0A) {
+      result += text.charAt(i); i += 1;
+    } else if (cp >= 0x20 && cp <= 0x7E) {
+      result += text.charAt(i); i += 1;
+    } else if (cp >= 0x00A0 && cp <= 0xD7FF) {
+      result += text.charAt(i); i += 1;
+    } else if (cp >= 0xE000 && cp <= 0xFFFD) {
+      result += text.charAt(i); i += 1;
+    } else if (cp >= 0x10000 && cp <= 0x10FFFF) {
+      result += text.charAt(i) + text.charAt(i + 1); i += 2;
+    } else {
+      i += (cp > 0xFFFF) ? 2 : 1;
+    }
+  }
+  return result;
 }
 
 function isCleanByte(code) {
@@ -1516,6 +1565,116 @@ test('background.js clears stale badges at start of injectAndMessage', () => {
   const fnBlock = js.substring(fnStart, fnStart + 400);
   assert(fnBlock.includes("setBadgeText({ text: ''"),
     'injectAndMessage must clear stale badge at start');
+});
+
+// ═══════════════════════════════════════════════════════════════
+// SECTION 15: PERFORMANCE AND ROBUSTNESS IMPROVEMENTS
+// ═══════════════════════════════════════════════════════════════
+
+console.log('\n--- Section 15a: isBlockElement hoisted lookup ---');
+
+test('text-extract.js has BLOCK_ELEMENTS at module scope', () => {
+  const js = fs.readFileSync(path.join(EXT, 'text-extract.js'), 'utf8');
+  assert(js.includes('var BLOCK_ELEMENTS = {'),
+    'Must have BLOCK_ELEMENTS as a module-scope variable');
+  // isBlockElement should reference the hoisted object, not create a new one
+  const fnStart = js.indexOf('function isBlockElement');
+  const fnEnd = js.indexOf('}', fnStart) + 1;
+  const fnBody = js.substring(fnStart, fnEnd);
+  assert(fnBody.includes('BLOCK_ELEMENTS'), 'isBlockElement must use hoisted BLOCK_ELEMENTS');
+  assert(!fnBody.includes('var blocks'), 'isBlockElement must NOT create local blocks object');
+});
+
+console.log('\n--- Section 15b: Batched REMOVE_SELECTORS ---');
+
+test('text-extract.js batches REMOVE_SELECTORS with comma-join', () => {
+  const js = fs.readFileSync(path.join(EXT, 'text-extract.js'), 'utf8');
+  assert(js.includes('BATCH_SIZE') || js.includes('batch.join'),
+    'Must batch selectors for performance');
+  assert(js.includes("REMOVE_TAGS.join(',')") || js.includes("REMOVE_TAGS.join(','"),
+    'Must join REMOVE_TAGS into single querySelectorAll');
+});
+
+test('text-extract.js batched selectors have fallback for invalid selectors', () => {
+  const js = fs.readFileSync(path.join(EXT, 'text-extract.js'), 'utf8');
+  const batchIdx = js.indexOf('BATCH_SIZE');
+  if (batchIdx > 0) {
+    const batchBlock = js.substring(batchIdx, batchIdx + 500);
+    assert(batchBlock.includes('catch'),
+      'Batched selectors must have try/catch fallback');
+  }
+});
+
+console.log('\n--- Section 15c: Debounce guard ---');
+
+test('content.js has conversion-in-progress guard', () => {
+  const js = fs.readFileSync(path.join(EXT, 'content.js'), 'utf8');
+  assert(js.includes('__conversionInProgress'),
+    'Must have conversionInProgress guard');
+  // Must set to true at start and false in finally
+  assert(js.includes('__conversionInProgress = true'),
+    'Must lock at start of handleConversion');
+  assert(js.includes('__conversionInProgress = false'),
+    'Must unlock in finally block');
+});
+
+test('content.js debounce unlock is in finally block', () => {
+  const js = fs.readFileSync(path.join(EXT, 'content.js'), 'utf8');
+  const finallyIdx = js.indexOf('} finally {');
+  const unlockIdx = js.indexOf('__conversionInProgress = false');
+  assert(finallyIdx > 0 && unlockIdx > finallyIdx,
+    'Debounce unlock must be inside the finally block');
+});
+
+console.log('\n--- Section 15d: Windows reserved filenames ---');
+
+test('content.js buildSmartFilename guards Windows reserved names', () => {
+  const js = fs.readFileSync(path.join(EXT, 'content.js'), 'utf8');
+  assert(js.includes('CON') && js.includes('PRN') && js.includes('NUL'),
+    'Must check for Windows reserved filenames');
+  assert(js.includes('COM') && js.includes('LPT'),
+    'Must check COM and LPT device names');
+});
+
+console.log('\n--- Section 15e: CSS framework hidden class detection ---');
+
+test('text-extract.js removes elements hidden by common CSS classes', () => {
+  const js = fs.readFileSync(path.join(EXT, 'text-extract.js'), 'utf8');
+  assert(js.includes('.hidden'), 'Must remove .hidden class');
+  assert(js.includes('.d-none'), 'Must remove Bootstrap .d-none');
+  assert(js.includes('.invisible'), 'Must remove .invisible class');
+  assert(js.includes('display: none') || js.includes('display:none'),
+    'Must remove style*="display:none" via attribute selector');
+});
+
+console.log('\n--- Section 15f: Test sanitizeOutput matches real implementation ---');
+
+test('test-suite sanitizeOutput includes stripAstralInvisibles step', () => {
+  // Read our own source to verify the test function has the step
+  const src = fs.readFileSync(__filename, 'utf8');
+  const fnStart = src.indexOf('function sanitizeOutput(text)');
+  const fnEnd = src.indexOf('\n}\n', fnStart);
+  const fnBody = src.substring(fnStart, fnEnd);
+  assert(fnBody.includes('stripAstralInvisibles'),
+    'Test sanitizeOutput must call stripAstralInvisibles');
+  assert(fnBody.includes('filterToPrintable'),
+    'Test sanitizeOutput must call filterToPrintable');
+});
+
+test('test-suite sanitizeOutput regex patterns match text-extract.js', () => {
+  const real = fs.readFileSync(path.join(EXT, 'text-extract.js'), 'utf8');
+  const testSrc = fs.readFileSync(__filename, 'utf8');
+  // Extract CONTROL_CHARS regex from real code
+  const realControlMatch = real.match(/var CONTROL_CHARS = (\/[^/]+\/g);/);
+  assert(realControlMatch, 'Must find CONTROL_CHARS in text-extract.js');
+  // Verify test has the same pattern (allowing for minor format differences)
+  const testControlMatch = testSrc.match(/\/\[\\x00-\\x08\\x0B\\x0C\\x0E-\\x1F\\x7F\\x80-\\x9F\]\/g/);
+  assert(testControlMatch, 'Test must have identical CONTROL_CHARS regex');
+  // Verify INVISIBLE_CHARS regex present in both
+  const realInvisMatch = real.match(/var INVISIBLE_CHARS = (\/[^/]+\/g);/);
+  const testInvisPattern = testSrc.includes('\\u00AD\\u034F\\u061C');
+  assert(realInvisMatch && testInvisPattern,
+    'INVISIBLE_CHARS regex must be present in both files');
 });
 
 // ═══════════════════════════════════════════════════════════════
