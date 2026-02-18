@@ -42,12 +42,6 @@ document.addEventListener('DOMContentLoaded', () => {
   for (const [id, action] of Object.entries(buttons)) {
     const btn = document.getElementById(id);
 
-    btn.addEventListener('pointerdown', (e) => {
-      const rect = e.currentTarget.getBoundingClientRect();
-      e.currentTarget.style.setProperty('--ripple-x', ((e.clientX - rect.left) / rect.width * 100) + '%');
-      e.currentTarget.style.setProperty('--ripple-y', ((e.clientY - rect.top) / rect.height * 100) + '%');
-    });
-
     btn.addEventListener('click', async () => {
       typeStatus('Processing...', 'status-processing');
       btn.classList.add('is-active');
