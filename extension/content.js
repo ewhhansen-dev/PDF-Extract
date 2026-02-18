@@ -11,7 +11,7 @@ if (!window.__contentConverterLoaded) {
   chrome.runtime.onMessage.addListener(function (request, sender, sendResponse) {
     if (request.action === 'convert') {
       handleConversion(request.format, request.scope).then(function (result) {
-        sendResponse(result || { success: true });
+        sendResponse(result);
       }).catch(function (err) {
         sendResponse({ success: false, error: err.message || String(err) });
       });
@@ -28,112 +28,117 @@ async function handleConversion(format, scope) {
   }
   window.__conversionInProgress = true;
   var element;
-  var htmlContent;
-  var textContent;
-
-  if (scope === 'selection') {
-    var selection = window.getSelection();
-    if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
-      var noSelMsg = 'No text selected. Please select some content first.';
-      showNotice(noSelMsg, 'warn');
-      return { success: false, error: noSelMsg };
-    }
-
-    var container = document.createElement('div');
-    for (var i = 0; i < selection.rangeCount; i++) {
-      container.appendChild(selection.getRangeAt(i).cloneContents());
-    }
-
-    // For screenshot PDF: append to DOM for html2canvas rendering
-    if (format === 'pdf') {
-      container.style.position = 'fixed';
-      container.style.left = '0';
-      container.style.top = '0';
-      container.style.width = '100%';
-      container.style.zIndex = '-9999';
-      container.style.backgroundColor = 'white';
-      container.style.color = 'black';
-      document.body.appendChild(container);
-      element = container;
-      element._isTemp = true;
-    }
-
-    htmlContent = container.innerHTML;
-
-    if (typeof extractPureText === 'function') {
-      textContent = extractPureText(container);
-    } else {
-      textContent = container.innerText || container.textContent || '';
-    }
-
-  } else if (scope === 'modal') {
-    var modalEl = findActiveModal();
-    if (!modalEl) {
-      var noModalMsg = 'No popup, modal, or preview window detected on this page.';
-      showNotice(noModalMsg, 'warn');
-      return { success: false, error: noModalMsg };
-    }
-
-    element = modalEl;
-    htmlContent = modalEl.innerHTML;
-
-    if (typeof extractPureText === 'function') {
-      textContent = extractPureText(modalEl);
-    } else {
-      textContent = modalEl.innerText || modalEl.textContent || '';
-    }
-
-  } else {
-    if (!document.body) {
-      var noBodyMsg = 'No page content found. The page may still be loading or is not an HTML document.';
-      showNotice(noBodyMsg, 'error');
-      return { success: false, error: noBodyMsg };
-    }
-    element = document.body;
-    htmlContent = document.body.innerHTML;
-
-    if (typeof extractPureText === 'function') {
-      textContent = extractPureText(document.body);
-    } else {
-      var clone = document.body.cloneNode(true);
-      clone.querySelectorAll('script, style, noscript').forEach(function (n) { n.remove(); });
-      textContent = clone.innerText || '';
-    }
-  }
-
-  // --- EMPTY EXTRACTION GUARD ---
-  if (!textContent || textContent.trim().length === 0) {
-    var emptyMsg = 'No extractable text found on this page. The content may be dynamically loaded or protected.';
-    showNotice(emptyMsg, 'error');
-    return { success: false, error: emptyMsg };
-  }
-
-  // --- SMART FILENAME ---
-  // Use first line of extracted text (up to 7 words), fall back to page title
-  var smartName = buildSmartFilename(textContent);
-  var timestamp = new Date().toISOString().slice(0, 19).replace(/[:.]/g, '-');
-
-  // --- INFO HEADER ---
-  // Prepended to file exports (not clipboard, not screenshot PDF)
-  var scopeLabel = scope === 'selection' ? 'Selection' : scope === 'modal' ? 'Popup/Preview' : 'Full page';
-  var infoHeader = buildInfoHeader(document.title, window.location.href, scopeLabel, format);
 
   try {
+    var textContent;
+    var htmlContent;
+
+    if (scope === 'selection') {
+      var selection = window.getSelection();
+      if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
+        var noSelMsg = 'No text selected. Please select some content first.';
+        showNotice(noSelMsg, 'warn');
+        return { success: false, error: noSelMsg };
+      }
+
+      var container = document.createElement('div');
+      for (var i = 0; i < selection.rangeCount; i++) {
+        container.appendChild(selection.getRangeAt(i).cloneContents());
+      }
+
+      // For screenshot PDF: append to DOM for html2canvas rendering
+      if (format === 'pdf') {
+        container.style.position = 'fixed';
+        container.style.left = '0';
+        container.style.top = '0';
+        container.style.width = '100%';
+        container.style.zIndex = '-9999';
+        container.style.backgroundColor = 'white';
+        container.style.color = 'black';
+        document.body.appendChild(container);
+        element = container;
+        element._isTemp = true;
+      }
+
+      if (format === 'md') {
+        htmlContent = container.innerHTML;
+      }
+
+      if (typeof extractPureText === 'function') {
+        textContent = extractPureText(container);
+      } else {
+        textContent = container.innerText || container.textContent || '';
+      }
+
+    } else if (scope === 'modal') {
+      var modalEl = findActiveModal();
+      if (!modalEl) {
+        var noModalMsg = 'No popup, modal, or preview window detected on this page.';
+        showNotice(noModalMsg, 'warn');
+        return { success: false, error: noModalMsg };
+      }
+
+      element = modalEl;
+
+      if (format === 'md') {
+        htmlContent = modalEl.innerHTML;
+      }
+
+      if (typeof extractPureText === 'function') {
+        textContent = extractPureText(modalEl);
+      } else {
+        textContent = modalEl.innerText || modalEl.textContent || '';
+      }
+
+    } else {
+      if (!document.body) {
+        var noBodyMsg = 'No page content found. The page may still be loading or is not an HTML document.';
+        showNotice(noBodyMsg, 'error');
+        return { success: false, error: noBodyMsg };
+      }
+      element = document.body;
+
+      if (format === 'md') {
+        htmlContent = document.body.innerHTML;
+      }
+
+      if (typeof extractPureText === 'function') {
+        textContent = extractPureText(document.body);
+      } else {
+        var clone = document.body.cloneNode(true);
+        clone.querySelectorAll('script, style, noscript').forEach(function (n) { n.remove(); });
+        textContent = clone.innerText || '';
+      }
+    }
+
+    // --- EMPTY EXTRACTION GUARD ---
+    if (!textContent || textContent.trim().length === 0) {
+      var emptyMsg = 'No extractable text found on this page. The content may be dynamically loaded or protected.';
+      showNotice(emptyMsg, 'error');
+      return { success: false, error: emptyMsg };
+    }
+
+    // --- SMART FILENAME ---
+    var smartName = buildSmartFilename(textContent);
+    var timestamp = new Date().toISOString().slice(0, 19).replace(/[:.]/g, '-');
+    var scopeLabel = scope === 'selection' ? 'Selection' : scope === 'modal' ? 'Popup/Preview' : 'Full page';
+
     // --- CLIPBOARD ---
     if (format === 'clipboard') {
       await copyToClipboard(textContent);
-      showCopyNotice();
+      showNotice('Copied to clipboard', 'success');
       return { success: true, action: 'clipboard' };
     }
 
     if (format === 'txt') {
+      var infoHeader = buildInfoHeader(document.title, window.location.href, scopeLabel, format);
       var txtFilename = smartName + '_' + timestamp + '.txt';
-      var txtOutput = infoHeader + textContent;
-      downloadFile(txtFilename, txtOutput, 'text/plain;charset=utf-8');
+      downloadFile(txtFilename, infoHeader + textContent, 'text/plain;charset=utf-8');
 
     } else if (format === 'pdf-typewriter') {
+      var twHeader = buildInfoHeader(document.title, window.location.href, scopeLabel, format);
       var twFilename = smartName + '_typewriter_' + timestamp + '.pdf';
-      var twOutput = infoHeader + textContent;
+      var twOutput = twHeader + textContent;
       var jsPDFConstructor = window.jspdf.jsPDF;
       var paperSize = detectPaperSize();
       var doc = new jsPDFConstructor({ orientation: 'p', unit: 'mm', format: paperSize.format });
@@ -179,8 +184,10 @@ async function handleConversion(format, scope) {
           'Lower Shields (lion icon) for visual screenshots.',
           'warn'
         );
-        format = 'pdf-typewriter';
-        return handleConversion(format, scope);
+        // Reset debounce and cleanup before recursive fallback
+        window.__conversionInProgress = false;
+        if (element && element._isTemp) { element.remove(); element = null; }
+        return handleConversion('pdf-typewriter', scope);
       }
 
       // Brave canvas fingerprint protection: detect blank/randomized canvas.
@@ -200,8 +207,10 @@ async function handleConversion(format, scope) {
             'Screenshot blank due to Brave Shields. Falling back to Typewriter PDF.',
             'warn'
           );
-          format = 'pdf-typewriter';
-          return handleConversion(format, scope);
+          // Reset debounce and cleanup before recursive fallback
+          window.__conversionInProgress = false;
+          if (element && element._isTemp) { element.remove(); element = null; }
+          return handleConversion('pdf-typewriter', scope);
         }
       }
 
@@ -334,7 +343,7 @@ function sanitizeHeaderField(str) {
   str = str.replace(/[\u201C\u201D\u201E\u201F]/g, '"');
   str = str.replace(/[\u2013\u2014]/g, '-');
   str = str.replace(/\u2026/g, '...');
-  str = str.replace(/[\u00A0]/g, ' ');
+  str = str.replace(/\u00A0/g, ' ');
   // Final filter: keep only printable ASCII (space through tilde) plus tab/newline
   str = str.replace(/[^\x20-\x7E\t\n]/g, '');
   return str.trim();
@@ -412,10 +421,6 @@ function showNotice(msg, type) {
     notice.style.opacity = '0';
     setTimeout(function () { notice.remove(); }, 300);
   }, duration);
-}
-
-function showCopyNotice() {
-  showNotice('Copied to clipboard', 'success');
 }
 
 // --- CLIPBOARD WITH FALLBACK ---
@@ -497,8 +502,6 @@ var MODAL_SELECTORS = [
   '[class*="Lightbox"]',
   '[class*="file-viewer"]',
   '[class*="FileViewer"]',
-  '[class*="file-preview"]',
-  '[class*="FilePreview"]',
   '[class*="popup-content"]',
   '[class*="PopupContent"]',
   '[class*="popover-content"]',

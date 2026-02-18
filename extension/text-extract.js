@@ -68,7 +68,7 @@
     'button[aria-label="Bad response"]',
 
     // Sidebar and aside
-    'aside', '[role="aside"]',
+    'aside',
     '[class*="sidebar"]', '[class*="Sidebar"]',
     '[class*="side-panel"]',
 
@@ -91,7 +91,6 @@
   var CHAT_CONTAINER_SELECTORS = [
     // ChatGPT (modern: Tailwind classes, data-testid on turns, main wrapper)
     'main [role="presentation"]',
-    'main .flex.flex-col',
     '[class*="conversation"]', '[class*="Conversation"]',
     'main [class*="thread"]', '[class*="Thread"]',
 
@@ -150,7 +149,6 @@
   // --- CODE BLOCK DETECTION ---
 
   var CODE_BLOCK_SELECTORS = [
-    'pre code', 'pre', '.highlight pre',
     '[class*="code-block"]', '[class*="CodeBlock"]',
     '[class*="codeBlock"]',
     '.hljs', '.prism-code', '.shiki',
@@ -300,9 +298,7 @@
   // so we catch the most common hide-by-class patterns explicitly.
   var HIDDEN_CLASS_SELECTORS = [
     '.hidden', '.d-none', '.d-hide', '.is-hidden', '.is-invisible',
-    '.collapse:not(.show)', '.invisible',
-    '[style*="display: none"]', '[style*="display:none"]',
-    '[style*="visibility: hidden"]', '[style*="visibility:hidden"]'
+    '.collapse:not(.show)', '.invisible'
   ];
 
   function removeHiddenElements(root) {

@@ -114,7 +114,8 @@ const contentSrc = fs.readFileSync(path.join(EXT, 'content.js'), 'utf8');
 // and textContent goes directly to downloadFile
 const hasExtractCall = contentSrc.includes('extractPureText(');
 const txtDownloadLine = contentSrc.includes("downloadFile(txtFilename, txtOutput, 'text/plain;charset=utf-8')") ||
-  contentSrc.includes("downloadFile(txtFilename, textContent, 'text/plain;charset=utf-8')");
+  contentSrc.includes("downloadFile(txtFilename, textContent, 'text/plain;charset=utf-8')") ||
+  contentSrc.includes("downloadFile(txtFilename, infoHeader + textContent, 'text/plain;charset=utf-8')");
 
 if (hasExtractCall && txtDownloadLine) {
   console.log('  VERIFIED: extractPureText output flows directly to downloadFile');

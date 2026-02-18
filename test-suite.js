@@ -308,7 +308,8 @@ test('content.js has clipboard format handler with fallback', () => {
 
 test('content.js has copy success notification', () => {
   const js = fs.readFileSync(path.join(EXT, 'content.js'), 'utf8');
-  assert(js.includes('showCopyNotice'), 'Must have showCopyNotice function');
+  assert(js.includes("showNotice('Copied to clipboard'") || js.includes('showCopyNotice'),
+    'Must show copy confirmation via showNotice');
   assert(js.includes('Copied to clipboard'), 'Must show copy confirmation text');
 });
 
@@ -1100,7 +1101,8 @@ test('content.js buildInfoHeader uses sanitizeHeaderField for all dynamic fields
 
 test('content.js markdown header also uses sanitizeHeaderField', () => {
   const js = fs.readFileSync(path.join(EXT, 'content.js'), 'utf8');
-  const mdIdx = js.indexOf("format === 'md'");
+  const mdIdx = js.indexOf("} else if (format === 'md')");
+  assert(mdIdx > 0, 'Must have md format handler');
   const mdBlock = js.substring(mdIdx, mdIdx + 500);
   assert(mdBlock.includes('sanitizeHeaderField'), 'Markdown header must use sanitizeHeaderField');
 });
@@ -1156,7 +1158,7 @@ test('content.js uses DOM notifications instead of alert()', () => {
 test('content.js showNotice supports error, warn, and success types', () => {
   const js = fs.readFileSync(path.join(EXT, 'content.js'), 'utf8');
   const fnStart = js.indexOf('function showNotice');
-  const fnEnd = js.indexOf('function showCopyNotice');
+  const fnEnd = js.indexOf('\n}\n', fnStart);
   const fnBlock = js.substring(fnStart, fnEnd);
   assert(fnBlock.includes("'error'") || fnBlock.includes('"error"'), 'Must handle error type');
   assert(fnBlock.includes("'warn'") || fnBlock.includes('"warn"'), 'Must handle warn type');
@@ -1415,7 +1417,9 @@ test('content.js has sanitizeMarkdownBody function', () => {
 
 test('content.js calls sanitizeMarkdownBody on markdown output', () => {
   const js = fs.readFileSync(path.join(EXT, 'content.js'), 'utf8');
-  const mdIdx = js.indexOf("format === 'md'");
+  // Find the md export handler (the "else if (format === 'md')" branch, not the lazy htmlContent checks)
+  const mdIdx = js.indexOf("} else if (format === 'md')");
+  assert(mdIdx > 0, 'Must have md format handler');
   const mdBlock = js.substring(mdIdx, mdIdx + 500);
   assert(mdBlock.includes('sanitizeMarkdownBody(markdown)'),
     'Must call sanitizeMarkdownBody on turndown output');
@@ -1499,8 +1503,9 @@ console.log('\n--- Section 14a: Brave fallback returns recursive result ---');
 test('content.js Brave canvas fallbacks use return (not fire-and-forget)', () => {
   const js = fs.readFileSync(path.join(EXT, 'content.js'), 'utf8');
   // Both Brave fallback paths must return the recursive handleConversion call
-  // so the promise chain propagates the result back to sendResponse
-  assert(js.includes('return handleConversion(format, scope);'),
+  // so the promise chain propagates the result back to sendResponse.
+  // The debounce flag must be reset before the recursive call.
+  assert(js.includes("return handleConversion('pdf-typewriter', scope)"),
     'Brave fallback must return the recursive handleConversion call');
   // Must NOT have fire-and-forget pattern (handleConversion followed by bare return)
   assert(!js.includes('handleConversion(format, scope);\n        return;'),
@@ -1621,8 +1626,10 @@ test('content.js has conversion-in-progress guard', () => {
 test('content.js debounce unlock is in finally block', () => {
   const js = fs.readFileSync(path.join(EXT, 'content.js'), 'utf8');
   const finallyIdx = js.indexOf('} finally {');
-  const unlockIdx = js.indexOf('__conversionInProgress = false');
-  assert(finallyIdx > 0 && unlockIdx > finallyIdx,
+  assert(finallyIdx > 0, 'Must have a finally block');
+  // The finally block should contain the debounce unlock
+  const finallyBlock = js.substring(finallyIdx, finallyIdx + 200);
+  assert(finallyBlock.includes('__conversionInProgress = false'),
     'Debounce unlock must be inside the finally block');
 });
 
@@ -1643,8 +1650,9 @@ test('text-extract.js removes elements hidden by common CSS classes', () => {
   assert(js.includes('.hidden'), 'Must remove .hidden class');
   assert(js.includes('.d-none'), 'Must remove Bootstrap .d-none');
   assert(js.includes('.invisible'), 'Must remove .invisible class');
-  assert(js.includes('display: none') || js.includes('display:none'),
-    'Must remove style*="display:none" via attribute selector');
+  // Second pass in removeHiddenElements catches display:none via inline style property check
+  assert(js.includes("style.display === 'none'"),
+    'Must remove display:none elements via inline style check');
 });
 
 console.log('\n--- Section 15f: Test sanitizeOutput matches real implementation ---');
@@ -1770,7 +1778,10 @@ test('content.js typewriter PDF uses detectPaperSize instead of hardcoded a4', (
 
 test('content.js screenshot PDF uses detectPaperSize instead of hardcoded a4', () => {
   const src = fs.readFileSync(path.join(EXT, 'content.js'), 'utf8');
-  const pdfSection = src.substring(src.indexOf("format === 'pdf'"), src.indexOf("format === 'md'"));
+  // Find the screenshot PDF handler (the "else if (format === 'pdf')" branch)
+  const pdfStart = src.indexOf("} else if (format === 'pdf')");
+  const pdfEnd = src.indexOf("} else if (format === 'md')");
+  const pdfSection = src.substring(pdfStart, pdfEnd);
   assert(pdfSection.includes('detectPaperSize()') || pdfSection.includes('screenshotPaper'),
     'Screenshot PDF must use detected paper size');
 });

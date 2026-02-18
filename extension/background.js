@@ -63,7 +63,7 @@ chrome.runtime.onInstalled.addListener(() => {
     contexts: ['page', 'selection']
   });
 
-  // Separator via a disabled item
+  // Separator
   chrome.contextMenus.create({
     id: 'ctx-sep-1',
     parentId: 'pdf-extract-parent',
