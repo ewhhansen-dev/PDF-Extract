@@ -112,16 +112,12 @@ async function handleConversion(format, scope) {
     }
 
     // --- EMPTY EXTRACTION GUARD ---
-    if (!textContent || textContent.trim().length === 0) {
+    // Screenshot PDF renders visual content via html2canvas and does not need text
+    if (format !== 'pdf' && (!textContent || textContent.trim().length === 0)) {
       var emptyMsg = 'No extractable text found on this page. The content may be dynamically loaded or protected.';
       showNotice(emptyMsg, 'error');
       return { success: false, error: emptyMsg };
     }
-
-    // --- SMART FILENAME ---
-    var smartName = buildSmartFilename(textContent);
-    var timestamp = new Date().toISOString().slice(0, 19).replace(/[:.]/g, '-');
-    var scopeLabel = scope === 'selection' ? 'Selection' : scope === 'modal' ? 'Popup/Preview' : 'Full page';
 
     // --- CLIPBOARD ---
     if (format === 'clipboard') {
@@ -129,6 +125,11 @@ async function handleConversion(format, scope) {
       showNotice('Copied to clipboard', 'success');
       return { success: true, action: 'clipboard' };
     }
+
+    // --- SMART FILENAME ---
+    var smartName = buildSmartFilename(textContent);
+    var timestamp = new Date().toISOString().slice(0, 19).replace(/[:.]/g, '-');
+    var scopeLabel = scope === 'selection' ? 'Selection' : scope === 'modal' ? 'Popup/Preview' : 'Full page';
 
     if (format === 'txt') {
       var infoHeader = buildInfoHeader(document.title, window.location.href, scopeLabel, format);
@@ -227,7 +228,7 @@ async function handleConversion(format, scope) {
       pdfDoc.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
       heightLeft -= pageHeight;
 
-      while (heightLeft >= 0) {
+      while (heightLeft > 0) {
         position -= pageHeight;
         pdfDoc.addPage();
         pdfDoc.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
@@ -368,10 +369,7 @@ function sanitizeMarkdownBody(text) {
 function buildInfoHeader(title, url, scopeLabel, format) {
   var formatLabels = {
     'txt': 'Plain text (.txt)',
-    'pdf-typewriter': 'Typewriter PDF (.pdf)',
-    'pdf': 'Screenshot PDF (.pdf)',
-    'md': 'Markdown (.md)',
-    'clipboard': 'Clipboard'
+    'pdf-typewriter': 'Typewriter PDF (.pdf)'
   };
   var now = new Date();
   var dateStr = now.toLocaleDateString('en-US', {

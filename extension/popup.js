@@ -183,6 +183,7 @@ function showError(msg) {
   setButtonsDisabled(false);
 
   var el = document.getElementById('error-msg');
+  if (!el) return;
   el.textContent = msg;
   el.style.display = 'block';
 }

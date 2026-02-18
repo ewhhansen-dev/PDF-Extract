@@ -138,12 +138,12 @@
   // Used by processNode on every element during tree walk.
   // Hoisting avoids re-creating this object on each call.
   var BLOCK_ELEMENTS = {
-    'div':1, 'p':1, 'section':1, 'article':1, 'main':1, 'aside':1,
+    'div':1, 'p':1, 'section':1, 'article':1, 'main':1,
     'blockquote':1, 'figure':1, 'figcaption':1, 'details':1, 'summary':1,
     'ul':1, 'ol':1, 'li':1, 'dl':1, 'dt':1, 'dd':1,
     'table':1, 'thead':1, 'tbody':1, 'tfoot':1, 'tr':1,
     'h1':1, 'h2':1, 'h3':1, 'h4':1, 'h5':1, 'h6':1,
-    'address':1, 'fieldset':1, 'pre':1
+    'address':1, 'fieldset':1
   };
 
   // --- CODE BLOCK DETECTION ---
@@ -378,7 +378,7 @@
       }
     }
 
-    if (!chatContainer || messages.length < 2) return null;
+    if (messages.length < 2) return null;
 
     var lines = [];
     var msg, role, msgText, cleanText;
@@ -554,8 +554,6 @@
   function isCodeBlock(el) {
     var tag = el.tagName.toLowerCase();
     if (tag === 'pre') return true;
-    if (tag === 'code' && el.parentElement &&
-        el.parentElement.tagName.toLowerCase() === 'pre') return true;
 
     for (var i = 0; i < CODE_BLOCK_SELECTORS.length; i++) {
       try {
