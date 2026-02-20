@@ -611,8 +611,8 @@ console.log('\n--- Section 5: Byte-level output purity simulation ---');
 function sanitizeOutput(text) {
   // Step 1: Control chars except \t \n \r
   text = text.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F\x80-\x9F]/g, '');
-  // Step 2: Invisible Unicode
-  text = text.replace(/[\u00AD\u034F\u061C\u115F\u1160\u17B4\u17B5\u180B-\u180E\u200B-\u200F\u202A-\u202E\u2060-\u2064\u2066-\u206F\uFE00-\uFE0F\uFEFF\uFFF0-\uFFF8\uFFF9-\uFFFB]/g, '');
+  // Step 2: Invisible Unicode (expanded: Syriac, Arabic, Braille blank, Hangul fillers, Object Replacement)
+  text = text.replace(/[\u00AD\u034F\u061C\u070F\u08E2\u115F\u1160\u17B4\u17B5\u180B-\u180E\u200B-\u200F\u202A-\u202E\u2060-\u206F\u2800\u3164\uFE00-\uFE0F\uFEFF\uFFA0\uFFF0-\uFFFC]/g, '');
   // Step 3: Surrogate halves
   text = text.replace(/[\uD800-\uDFFF]/g, '');
   // Step 4: Astral plane invisibles (Tags, VS Supplement, Shorthand Format Controls)
@@ -648,7 +648,9 @@ function stripAstralInvisibles(text) {
     var cp = text.codePointAt(i);
     if ((cp >= 0xE0001 && cp <= 0xE007F) ||
         (cp >= 0xE0100 && cp <= 0xE01EF) ||
-        (cp >= 0x1BCA0 && cp <= 0x1BCA3)) {
+        (cp >= 0x1BCA0 && cp <= 0x1BCA3) ||
+        (cp >= 0x1D173 && cp <= 0x1D17A) ||
+        (cp >= 0x13430 && cp <= 0x1343F)) {
       i += 2;
       continue;
     }
@@ -823,12 +825,14 @@ test('Stress test: 100 random invisible chars injected into text', () => {
     '\u0000', '\u0001', '\u0002', '\u0003', '\u0004', '\u0005',
     '\u0006', '\u0007', '\u0008', '\u000B', '\u000C', '\u000E',
     '\u000F', '\u007F', '\u0080', '\u0090', '\u009F',
-    '\u00AD', '\u034F', '\u061C', '\u200B', '\u200C', '\u200D',
+    '\u00AD', '\u034F', '\u061C', '\u070F', '\u08E2',
+    '\u200B', '\u200C', '\u200D',
     '\u200E', '\u200F', '\u202A', '\u202B', '\u202C', '\u202D',
     '\u202E', '\u2060', '\u2061', '\u2062', '\u2063', '\u2064',
-    '\u2066', '\u2067', '\u2068', '\u2069', '\u206A', '\u206B',
-    '\u206C', '\u206D', '\u206E', '\u206F', '\uFE00', '\uFE01',
-    '\uFE0F', '\uFEFF', '\uFFF9', '\uFFFA', '\uFFFB'
+    '\u2065', '\u2066', '\u2067', '\u2068', '\u2069', '\u206A',
+    '\u206B', '\u206C', '\u206D', '\u206E', '\u206F',
+    '\u2800', '\u3164', '\uFE00', '\uFE01',
+    '\uFE0F', '\uFEFF', '\uFFA0', '\uFFF9', '\uFFFA', '\uFFFB', '\uFFFC'
   ];
 
   let input = 'The quick brown fox jumps over the lazy dog.';
@@ -1426,12 +1430,34 @@ test('content.js calls sanitizeMarkdownBody on markdown output', () => {
 });
 
 test('sanitizeMarkdownBody strips invisible chars but preserves Unicode text', () => {
-  // Reproduce sanitizeMarkdownBody to test
+  // Reproduce sanitizeMarkdownBody to test (must match content.js)
+  function stripMdAstral(text) {
+    var result = '';
+    var i = 0;
+    while (i < text.length) {
+      var cp = text.codePointAt(i);
+      // Orphaned surrogates (codePointAt returns surrogate value only if unpaired)
+      if (cp >= 0xD800 && cp <= 0xDFFF) { i += 1; continue; }
+      if ((cp >= 0xE0001 && cp <= 0xE007F) ||
+          (cp >= 0xE0100 && cp <= 0xE01EF) ||
+          (cp >= 0x1BCA0 && cp <= 0x1BCA3) ||
+          (cp >= 0x1D173 && cp <= 0x1D17A) ||
+          (cp >= 0x13430 && cp <= 0x1343F)) {
+        i += 2; continue;
+      }
+      if (cp > 0xFFFF) {
+        result += text.charAt(i) + text.charAt(i + 1); i += 2;
+      } else {
+        result += text.charAt(i); i += 1;
+      }
+    }
+    return result;
+  }
   function sanitizeMarkdownBody(text) {
     if (!text) return '';
     text = text.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F\x80-\x9F]/g, '');
-    text = text.replace(/[\u00AD\u034F\u061C\u115F\u1160\u17B4\u17B5\u180B-\u180E\u200B-\u200F\u202A-\u202E\u2060-\u2064\u2066-\u206F\uFE00-\uFE0F\uFEFF\uFFF0-\uFFF8\uFFF9-\uFFFB]/g, '');
-    text = text.replace(/[\uD800-\uDFFF]/g, '');
+    text = text.replace(/[\u00AD\u034F\u061C\u070F\u08E2\u115F\u1160\u17B4\u17B5\u180B-\u180E\u200B-\u200F\u202A-\u202E\u2060-\u206F\u2800\u3164\uFE00-\uFE0F\uFEFF\uFFA0\uFFF0-\uFFFC]/g, '');
+    text = stripMdAstral(text);
     text = text.replace(/\r\n/g, '\n');
     text = text.replace(/\r/g, '\n');
     return text;
@@ -1812,6 +1838,243 @@ test('content.js execCommandCopy returns boolean success status', () => {
   const fnBody = src.substring(fnStart, fnEnd);
   assert(fnBody.includes('return ok'), 'execCommandCopy must return ok boolean');
   assert(fnBody.includes("execCommand('copy')"), 'Must call execCommand copy');
+});
+
+// ═══════════════════════════════════════════════════════════════
+// SECTION 17: ANTI-EMBEDDING HARDENING — BYPASS VECTOR DEFENSE
+// ═══════════════════════════════════════════════════════════════
+
+console.log('\n--- Section 17a: Expanded INVISIBLE_CHARS coverage ---');
+
+test('Braille Pattern Blank (U+2800) is stripped from text output', () => {
+  const input = 'hidden\u2800message';
+  const output = sanitizeOutput(input);
+  assert(output === 'hiddenmessage\n', 'U+2800 must be stripped: got ' + JSON.stringify(output));
+  assert(isCleanForTypewriter(output), 'Must be typewriter-clean');
+});
+
+test('Hangul Filler (U+3164) is stripped from text output', () => {
+  const input = 'hidden\u3164message';
+  const output = sanitizeOutput(input);
+  assert(output === 'hiddenmessage\n', 'U+3164 must be stripped: got ' + JSON.stringify(output));
+  assert(isCleanForTypewriter(output), 'Must be typewriter-clean');
+});
+
+test('Halfwidth Hangul Filler (U+FFA0) is stripped from text output', () => {
+  const input = 'hidden\uFFA0message';
+  const output = sanitizeOutput(input);
+  assert(output === 'hiddenmessage\n', 'U+FFA0 must be stripped: got ' + JSON.stringify(output));
+  assert(isCleanForTypewriter(output), 'Must be typewriter-clean');
+});
+
+test('Object Replacement Character (U+FFFC) is stripped from text output', () => {
+  const input = 'hello\uFFFCworld';
+  const output = sanitizeOutput(input);
+  assert(output === 'helloworld\n', 'U+FFFC must be stripped: got ' + JSON.stringify(output));
+  assert(isCleanForTypewriter(output), 'Must be typewriter-clean');
+});
+
+test('Syriac Abbreviation Mark (U+070F) is stripped from text output', () => {
+  const input = 'test\u070Fdata';
+  const output = sanitizeOutput(input);
+  assert(output === 'testdata\n', 'U+070F must be stripped: got ' + JSON.stringify(output));
+  assert(isCleanForTypewriter(output), 'Must be typewriter-clean');
+});
+
+test('Arabic Disputed End of Ayah (U+08E2) is stripped from text output', () => {
+  const input = 'test\u08E2data';
+  const output = sanitizeOutput(input);
+  assert(output === 'testdata\n', 'U+08E2 must be stripped: got ' + JSON.stringify(output));
+  assert(isCleanForTypewriter(output), 'Must be typewriter-clean');
+});
+
+test('U+2065 (closed gap) is stripped from text output', () => {
+  const input = 'before\u2065after';
+  const output = sanitizeOutput(input);
+  assert(output === 'beforeafter\n', 'U+2065 must be stripped: got ' + JSON.stringify(output));
+  assert(isCleanForTypewriter(output), 'Must be typewriter-clean');
+});
+
+console.log('\n--- Section 17b: Expanded astral plane invisible stripping ---');
+
+test('Musical Symbol format controls (U+1D173-U+1D17A) are stripped', () => {
+  // U+1D173 = Musical Symbol Begin Beam
+  const char = String.fromCodePoint(0x1D173);
+  const input = 'music' + char + 'note';
+  const output = sanitizeOutput(input);
+  assert(output === 'musicnote\n', 'Musical format chars must be stripped: got ' + JSON.stringify(output));
+});
+
+test('Egyptian Hieroglyph format controls (U+13430-U+1343F) are stripped', () => {
+  // U+13430 = Egyptian Hieroglyph Vertical Joiner
+  const char = String.fromCodePoint(0x13430);
+  const input = 'text' + char + 'here';
+  const output = sanitizeOutput(input);
+  assert(output === 'texthere\n', 'Egyptian format chars must be stripped: got ' + JSON.stringify(output));
+});
+
+test('Typewriter output strips supplementary chars (emoji, CJK ext) by design', () => {
+  // Typewriter-grade output intentionally strips all supplementary plane characters
+  // because physical typewriters cannot produce them. This is by design.
+  // The SURROGATE_HALVES regex removes all surrogate code units, which destroys
+  // surrogate pairs (emoji, CJK Extension B, etc.) — intentional for typewriter purity.
+  const emoji = String.fromCodePoint(0x1F600); // U+1F600 Grinning Face
+  const cjk = String.fromCodePoint(0x20000);   // U+20000 CJK Extension B
+  const input = 'Hello ' + emoji + ' World ' + cjk;
+  const output = sanitizeOutput(input);
+  assert(!output.includes(emoji), 'Emoji must be stripped from typewriter output');
+  assert(!output.includes(cjk), 'CJK Extension B must be stripped from typewriter output');
+  assert(output === 'Hello World\n', 'Only ASCII text survives: got ' + JSON.stringify(output));
+  assert(isCleanForTypewriter(output), 'Must be typewriter-clean bytes');
+});
+
+console.log('\n--- Section 17c: DOM hiding detection hardening ---');
+
+test('text-extract.js detects font-size:0 hiding', () => {
+  const js = fs.readFileSync(path.join(EXT, 'text-extract.js'), 'utf8');
+  assert(js.includes("style.fontSize === '0'") || js.includes('style.fontSize === "0"'),
+    'Must detect font-size:0');
+  assert(js.includes("style.fontSize === '0px'") || js.includes('style.fontSize === "0px"'),
+    'Must detect font-size:0px');
+});
+
+test('text-extract.js detects text-indent offscreen hiding', () => {
+  const js = fs.readFileSync(path.join(EXT, 'text-extract.js'), 'utf8');
+  assert(js.includes('style.textIndent'), 'Must check textIndent for offscreen hiding');
+});
+
+console.log('\n--- Section 17d: sanitizeMarkdownBody hardening ---');
+
+test('content.js sanitizeMarkdownBody has expanded invisible char regex', () => {
+  const js = fs.readFileSync(path.join(EXT, 'content.js'), 'utf8');
+  const fnStart = js.indexOf('function sanitizeMarkdownBody');
+  const fnEnd = js.indexOf('function stripMarkdownAstralInvisibles');
+  const fnBlock = js.substring(fnStart, fnEnd);
+  // Must have the new invisible chars
+  assert(fnBlock.includes('\\u2800'), 'sanitizeMarkdownBody must strip Braille Pattern Blank');
+  assert(fnBlock.includes('\\u3164'), 'sanitizeMarkdownBody must strip Hangul Filler');
+  assert(fnBlock.includes('\\uFFA0'), 'sanitizeMarkdownBody must strip Halfwidth Hangul Filler');
+  assert(fnBlock.includes('\\uFFFC') || fnBlock.includes('\\uFFF0-\\uFFFC'),
+    'sanitizeMarkdownBody must strip Object Replacement Character');
+});
+
+test('content.js has stripMarkdownAstralInvisibles function', () => {
+  const js = fs.readFileSync(path.join(EXT, 'content.js'), 'utf8');
+  assert(js.includes('function stripMarkdownAstralInvisibles'),
+    'Must have stripMarkdownAstralInvisibles function');
+  assert(js.includes('0xE0001'), 'Must strip Tag characters in markdown');
+  assert(js.includes('0x1D173'), 'Must strip Musical Symbol format controls in markdown');
+  assert(js.includes('0x13430'), 'Must strip Egyptian Hieroglyph format controls in markdown');
+});
+
+test('content.js sanitizeMarkdownBody calls astral invisible stripper', () => {
+  const js = fs.readFileSync(path.join(EXT, 'content.js'), 'utf8');
+  const fnStart = js.indexOf('function sanitizeMarkdownBody');
+  const fnEnd = js.indexOf('function stripMarkdownAstralInvisibles');
+  const fnBlock = js.substring(fnStart, fnEnd);
+  assert(fnBlock.includes('stripMarkdownAstralInvisibles'),
+    'sanitizeMarkdownBody must call astral invisible stripper');
+});
+
+test('sanitizeMarkdownBody strips Braille blank but preserves emoji', () => {
+  // Reproduce the updated stripMarkdownAstralInvisibles (handles orphaned surrogates
+  // via codePointAt, preserving valid surrogate pairs like emoji)
+  function stripMdAstral(text) {
+    var result = '', i = 0;
+    while (i < text.length) {
+      var cp = text.codePointAt(i);
+      // Orphaned surrogates (codePointAt returns surrogate value only if unpaired)
+      if (cp >= 0xD800 && cp <= 0xDFFF) { i += 1; continue; }
+      // Invisible astral chars
+      if ((cp >= 0xE0001 && cp <= 0xE007F) || (cp >= 0xE0100 && cp <= 0xE01EF) ||
+          (cp >= 0x1BCA0 && cp <= 0x1BCA3) || (cp >= 0x1D173 && cp <= 0x1D17A) ||
+          (cp >= 0x13430 && cp <= 0x1343F)) { i += 2; continue; }
+      if (cp > 0xFFFF) { result += text.charAt(i) + text.charAt(i+1); i += 2; }
+      else { result += text.charAt(i); i += 1; }
+    }
+    return result;
+  }
+  function testSanitizeMd(text) {
+    if (!text) return '';
+    text = text.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F\x80-\x9F]/g, '');
+    text = text.replace(/[\u00AD\u034F\u061C\u070F\u08E2\u115F\u1160\u17B4\u17B5\u180B-\u180E\u200B-\u200F\u202A-\u202E\u2060-\u206F\u2800\u3164\uFE00-\uFE0F\uFEFF\uFFA0\uFFF0-\uFFFC]/g, '');
+    text = stripMdAstral(text);
+    text = text.replace(/\r\n/g, '\n');
+    text = text.replace(/\r/g, '\n');
+    return text;
+  }
+  const emoji = String.fromCodePoint(0x1F600);
+  const dirty = 'Hello\u2800' + emoji + '\u3164World';
+  const clean = testSanitizeMd(dirty);
+  assert(clean.includes(emoji), 'Emoji must survive in markdown');
+  assert(!clean.includes('\u2800'), 'Braille blank must be stripped from markdown');
+  assert(!clean.includes('\u3164'), 'Hangul filler must be stripped from markdown');
+  assert(clean === 'Hello' + emoji + 'World', 'Expected Hello+emoji+World, got: ' + JSON.stringify(clean));
+});
+
+console.log('\n--- Section 17e: INVISIBLE_CHARS regex parity between files ---');
+
+test('text-extract.js and content.js sanitizeMarkdownBody use same expanded INVISIBLE_CHARS', () => {
+  const te = fs.readFileSync(path.join(EXT, 'text-extract.js'), 'utf8');
+  const cj = fs.readFileSync(path.join(EXT, 'content.js'), 'utf8');
+  // Both must have the expanded chars
+  const newChars = ['\\u070F', '\\u08E2', '\\u2800', '\\u3164', '\\uFFA0'];
+  for (const ch of newChars) {
+    assert(te.includes(ch), 'text-extract.js must have ' + ch + ' in INVISIBLE_CHARS');
+    assert(cj.includes(ch), 'content.js sanitizeMarkdownBody must have ' + ch);
+  }
+});
+
+test('text-extract.js INVISIBLE_CHARS closes U+2065 gap', () => {
+  const js = fs.readFileSync(path.join(EXT, 'text-extract.js'), 'utf8');
+  // Must have continuous range \u2060-\u206F (no gap at U+2065)
+  assert(js.includes('\\u2060-\\u206F'), 'INVISIBLE_CHARS must have continuous \\u2060-\\u206F range');
+  // Must NOT have the old split ranges
+  assert(!js.includes('\\u2060-\\u2064\\u2066'), 'Must NOT have split ranges around U+2065');
+});
+
+test('text-extract.js stripAstralInvisibles covers all 5 ranges', () => {
+  const js = fs.readFileSync(path.join(EXT, 'text-extract.js'), 'utf8');
+  assert(js.includes('0xE0001'), 'Must strip Tag characters (U+E0001-E007F)');
+  assert(js.includes('0xE0100'), 'Must strip VS Supplement (U+E0100-E01EF)');
+  assert(js.includes('0x1BCA0'), 'Must strip Shorthand Format Controls (U+1BCA0-1BCA3)');
+  assert(js.includes('0x1D173'), 'Must strip Musical Symbol format controls (U+1D173-1D17A)');
+  assert(js.includes('0x13430'), 'Must strip Egyptian Hieroglyph format controls (U+13430-1343F)');
+});
+
+console.log('\n--- Section 17f: Combined steganographic attack simulation ---');
+
+test('Steganographic attack: Braille pattern encoding stripped', () => {
+  // Simulate steganographic encoding using Braille Pattern Blank (U+2800)
+  // between every character to encode a hidden binary message
+  const visible = 'Clean text here.';
+  let attack = '';
+  for (let i = 0; i < visible.length; i++) {
+    attack += visible[i];
+    attack += '\u2800'; // hidden payload bit
+  }
+  const output = sanitizeOutput(attack);
+  assert(output === 'Clean text here.\n', 'Braille stego attack must be neutralized: got ' + JSON.stringify(output));
+  assert(isCleanForTypewriter(output), 'Must be typewriter-clean after stego attack');
+});
+
+test('Steganographic attack: Hangul filler encoding stripped', () => {
+  // Simulate encoding using alternating Hangul fillers
+  const attack = 'Sec\u3164ret\uFFA0Msg\u3164End';
+  const output = sanitizeOutput(attack);
+  assert(output === 'SecretMsgEnd\n', 'Hangul filler stego must be neutralized: got ' + JSON.stringify(output));
+  assert(isCleanForTypewriter(output), 'Must be typewriter-clean');
+});
+
+test('Combined multi-vector attack: all invisible types injected simultaneously', () => {
+  // Attack combining: BMP invisibles, astral invisibles, control chars,
+  // zero-width, direction overrides, Braille blanks, Hangul fillers
+  const tag = String.fromCodePoint(0xE0001); // Tag character
+  const musical = String.fromCodePoint(0x1D173); // Musical Symbol Begin Beam
+  const attack = '\uFEFF\u200BH\u2800e\u3164l\uFFA0l\u070Fo\u08E2' + tag + musical + ' \u202Ew\u2060o\u2065r\u206Fl\u0001d\u0000!';
+  const output = sanitizeOutput(attack);
+  assert(output === 'Hello world!\n', 'Multi-vector attack must be fully neutralized: got ' + JSON.stringify(output));
+  assert(isCleanForTypewriter(output), 'Must be typewriter-clean after multi-vector attack');
 });
 
 // ═══════════════════════════════════════════════════════════════

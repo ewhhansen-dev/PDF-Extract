@@ -356,14 +356,51 @@ function sanitizeMarkdownBody(text) {
   if (!text) return '';
   // Strip C0/C1 control characters except tab, newline, carriage return
   text = text.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F\x80-\x9F]/g, '');
-  // Strip zero-width and invisible formatting characters
-  text = text.replace(/[\u00AD\u034F\u061C\u115F\u1160\u17B4\u17B5\u180B-\u180E\u200B-\u200F\u202A-\u202E\u2060-\u2064\u2066-\u206F\uFE00-\uFE0F\uFEFF\uFFF0-\uFFF8\uFFF9-\uFFFB]/g, '');
-  // Strip orphaned surrogate halves
-  text = text.replace(/[\uD800-\uDFFF]/g, '');
+  // Strip zero-width and invisible formatting characters (BMP)
+  // Matches the expanded INVISIBLE_CHARS in text-extract.js
+  text = text.replace(/[\u00AD\u034F\u061C\u070F\u08E2\u115F\u1160\u17B4\u17B5\u180B-\u180E\u200B-\u200F\u202A-\u202E\u2060-\u206F\u2800\u3164\uFE00-\uFE0F\uFEFF\uFFA0\uFFF0-\uFFFC]/g, '');
+  // Strip orphaned surrogate halves AND astral plane invisible characters.
+  // Uses codePointAt to distinguish orphaned surrogates from valid pairs (emoji, CJK).
+  // The blunt /[\uD800-\uDFFF]/g regex would destroy emoji; this preserves them.
+  text = stripMarkdownAstralInvisibles(text);
   // Normalize carriage returns
   text = text.replace(/\r\n/g, '\n');
   text = text.replace(/\r/g, '\n');
   return text;
+}
+
+// Strip invisible astral plane characters and orphaned surrogates from markdown
+// while preserving legitimate supplementary characters (emoji, CJK extensions, etc.).
+// Uses codePointAt to distinguish orphaned surrogates from valid surrogate pairs.
+function stripMarkdownAstralInvisibles(text) {
+  var result = '';
+  var i = 0;
+  var cp;
+  while (i < text.length) {
+    cp = text.codePointAt(i);
+    // Orphaned surrogate halves (codePointAt returns 0xD800-0xDFFF only for unpaired surrogates)
+    if (cp >= 0xD800 && cp <= 0xDFFF) {
+      i += 1;
+      continue;
+    }
+    // Invisible astral plane characters
+    if ((cp >= 0xE0001 && cp <= 0xE007F) ||   // Tag characters
+        (cp >= 0xE0100 && cp <= 0xE01EF) ||   // Variation Selectors Supplement
+        (cp >= 0x1BCA0 && cp <= 0x1BCA3) ||   // Shorthand Format Controls
+        (cp >= 0x1D173 && cp <= 0x1D17A) ||   // Musical Symbol format controls
+        (cp >= 0x13430 && cp <= 0x1343F)) {    // Egyptian Hieroglyph format controls
+      i += 2;
+      continue;
+    }
+    if (cp > 0xFFFF) {
+      result += text.charAt(i) + text.charAt(i + 1);
+      i += 2;
+    } else {
+      result += text.charAt(i);
+      i += 1;
+    }
+  }
+  return result;
 }
 
 function buildInfoHeader(title, url, scopeLabel, format) {

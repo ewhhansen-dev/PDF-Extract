@@ -164,7 +164,11 @@
   var CONTROL_CHARS = /[\x00-\x08\x0B\x0C\x0E-\x1F\x7F\x80-\x9F]/g;
 
   // Zero-width and invisible formatting characters
-  var INVISIBLE_CHARS = /[\u00AD\u034F\u061C\u115F\u1160\u17B4\u17B5\u180B-\u180E\u200B-\u200F\u202A-\u202E\u2060-\u2064\u2066-\u206F\uFE00-\uFE0F\uFEFF\uFFF0-\uFFF8\uFFF9-\uFFFB]/g;
+  // Includes: soft hyphen, combining grapheme joiner, Arabic/Syriac format chars,
+  // Hangul fillers, Khmer inherent vowels, Mongolian FVS, zero-width chars,
+  // bidi controls, invisible operators, Braille blank, variation selectors,
+  // BOM, halfwidth Hangul filler, specials, interlinear annotation, object replacement
+  var INVISIBLE_CHARS = /[\u00AD\u034F\u061C\u070F\u08E2\u115F\u1160\u17B4\u17B5\u180B-\u180E\u200B-\u200F\u202A-\u202E\u2060-\u206F\u2800\u3164\uFE00-\uFE0F\uFEFF\uFFA0\uFFF0-\uFFFC]/g;
 
   // Surrogate halves (should never appear in valid text)
   var SURROGATE_HALVES = /[\uD800-\uDFFF]/g;
@@ -325,7 +329,9 @@
         (style.position === 'absolute' && style.left &&
           (parseInt(style.left, 10) < -999 || parseInt(style.top, 10) < -999)) ||
         (style.width === '0px' && style.height === '0px') ||
-        (style.overflow === 'hidden' && style.maxHeight === '0px')
+        (style.overflow === 'hidden' && style.maxHeight === '0px') ||
+        style.fontSize === '0' || style.fontSize === '0px' ||
+        (style.textIndent && parseInt(style.textIndent, 10) < -999)
       ) {
         el.remove();
       }
@@ -656,6 +662,16 @@
       // Skip other known invisible astral chars
       // Shorthand Format Controls (U+1BCA0-U+1BCA3)
       if (cp >= 0x1BCA0 && cp <= 0x1BCA3) {
+        i += 2;
+        continue;
+      }
+      // Musical Symbol format controls (U+1D173-U+1D17A)
+      if (cp >= 0x1D173 && cp <= 0x1D17A) {
+        i += 2;
+        continue;
+      }
+      // Egyptian Hieroglyph format controls (U+13430-U+1343F)
+      if (cp >= 0x13430 && cp <= 0x1343F) {
         i += 2;
         continue;
       }
