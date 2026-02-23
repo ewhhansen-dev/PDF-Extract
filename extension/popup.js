@@ -45,9 +45,10 @@ function injectAndRun(format, scope) {
   showStatus('Processing...', 'loading');
   setButtonsDisabled(true);
 
-  // Hide any previous errors
+  // Hide any previous errors and preview
   var errEl = document.getElementById('error-msg');
   if (errEl) errEl.style.display = 'none';
+  resetPreview();
 
   chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
     if (!tabs || !tabs[0]) {
@@ -109,7 +110,7 @@ function injectAndRun(format, scope) {
           responded = true;
           showError('Operation timed out. The page may have blocked the extension. Try again.');
         }
-      }, 15000);
+      }, 8000);
 
       chrome.tabs.sendMessage(tabId, {
         action: 'convert',
@@ -125,6 +126,11 @@ function injectAndRun(format, scope) {
         }
         if (response && response.success === false) {
           showError(response.error || 'Conversion failed.');
+          return;
+        }
+        // Preview flow: show preview before downloading
+        if (response && response.action === 'preview') {
+          showPreview(response, tabId);
           return;
         }
         var successLabel = format === 'clipboard' ? 'Copied!' : 'Downloaded!';
@@ -186,4 +192,111 @@ function showError(msg) {
   if (!el) return;
   el.textContent = msg;
   el.style.display = 'block';
+}
+
+// --- PREVIEW FLOW ---
+// Shows a preview of extracted content before downloading.
+// Lets the user verify the extraction worked before committing to a download.
+
+function showPreview(data, tabId) {
+  // Hide loading status
+  var statusEl = document.getElementById('status-msg');
+  if (statusEl) statusEl.style.display = 'none';
+
+  var container = document.getElementById('preview-container');
+  var textEl = document.getElementById('preview-text');
+  var statsEl = document.getElementById('preview-stats');
+  if (!container || !textEl || !statsEl) return;
+
+  // Show preview text
+  var previewStr = (data.preview || '').trim();
+  if (previewStr.length > 0) {
+    textEl.textContent = previewStr + (data.totalChars > 300 ? '...' : '');
+    textEl.classList.remove('empty-preview');
+  } else if (data.isScreenshot) {
+    textEl.textContent = 'Visual screenshot captured.';
+    textEl.classList.remove('empty-preview');
+  } else {
+    textEl.textContent = '(No text content extracted)';
+    textEl.classList.add('empty-preview');
+  }
+
+  // Show stats
+  var stats = '';
+  if (data.totalChars > 0) {
+    stats = data.totalChars.toLocaleString() + ' chars';
+  }
+  if (data.filename) {
+    stats += (stats ? '  \u00B7  ' : '') + data.filename;
+  }
+  statsEl.textContent = stats;
+
+  // Show preview container, hide button groups
+  container.style.display = 'block';
+  var groups = document.querySelectorAll('.button-group');
+  for (var i = 0; i < groups.length; i++) {
+    groups[i].style.display = 'none';
+  }
+  var hint = document.querySelector('.shortcuts-hint');
+  if (hint) hint.style.display = 'none';
+
+  setButtonsDisabled(false);
+
+  // Wire up Download button
+  var dlBtn = document.getElementById('preview-download');
+  var cancelBtn = document.getElementById('preview-cancel');
+
+  if (dlBtn) {
+    dlBtn.onclick = function () {
+      dlBtn.disabled = true;
+      if (cancelBtn) cancelBtn.disabled = true;
+      showStatus('Downloading...', 'loading');
+
+      chrome.tabs.sendMessage(tabId, { action: 'download' }, function (resp) {
+        if (chrome.runtime.lastError) {
+          showError('Download failed: ' + (chrome.runtime.lastError.message || 'Lost connection to page.'));
+          resetPreview();
+          return;
+        }
+        if (resp && resp.success === false) {
+          showError(resp.error || 'Download failed.');
+          resetPreview();
+          return;
+        }
+        showStatus('Downloaded!', 'success');
+        setTimeout(function () { window.close(); }, 900);
+      });
+    };
+  }
+
+  // Wire up Cancel button
+  if (cancelBtn) {
+    cancelBtn.onclick = function () {
+      chrome.tabs.sendMessage(tabId, { action: 'cancel' }, function () {
+        // Ignore errors on cancel - just reset UI
+      });
+      resetPreview();
+    };
+  }
+}
+
+function resetPreview() {
+  var container = document.getElementById('preview-container');
+  if (container) container.style.display = 'none';
+
+  // Restore button groups
+  var groups = document.querySelectorAll('.button-group');
+  for (var i = 0; i < groups.length; i++) {
+    groups[i].style.display = '';
+  }
+  var hint = document.querySelector('.shortcuts-hint');
+  if (hint) hint.style.display = '';
+
+  setButtonsDisabled(false);
+
+  var statusEl = document.getElementById('status-msg');
+  if (statusEl) statusEl.style.display = 'none';
+
+  var errEl = document.getElementById('error-msg');
+  if (errEl) errEl.style.display = 'none';
 }

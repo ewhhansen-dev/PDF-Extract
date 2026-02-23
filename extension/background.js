@@ -203,8 +203,23 @@ function injectAndMessage(tab, format, scope) {
       if (chrome.runtime.lastError) {
         console.error('PDF Extract message failed:', chrome.runtime.lastError.message);
         flashBadge('ERR', '#991b1b', tabId);
-      } else if (response && response.success === false) {
+        return;
+      }
+      if (response && response.success === false) {
         flashBadge('ERR', '#991b1b', tabId);
+        return;
+      }
+      // Context menu and keyboard shortcuts skip the preview UI and
+      // download directly by sending the 'download' action immediately.
+      if (response && response.action === 'preview') {
+        chrome.tabs.sendMessage(tabId, { action: 'download' }, function (dlResp) {
+          if (chrome.runtime.lastError) {
+            console.error('PDF Extract download failed:', chrome.runtime.lastError.message);
+            flashBadge('ERR', '#991b1b', tabId);
+          } else if (dlResp && dlResp.success === false) {
+            flashBadge('ERR', '#991b1b', tabId);
+          }
+        });
       }
     });
   });

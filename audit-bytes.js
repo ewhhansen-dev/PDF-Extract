@@ -111,15 +111,17 @@ console.log('\n=== DOWNLOAD PATH AUDIT ===\n');
 const contentSrc = fs.readFileSync(path.join(EXT, 'content.js'), 'utf8');
 
 // Check: extractPureText is called, its output goes to textContent,
-// and textContent goes directly to downloadFile
+// and textContent flows through __pendingExport to downloadFile via performDownload.
+// The preview flow stores extracted text as-is (no encoding transforms).
 const hasExtractCall = contentSrc.includes('extractPureText(');
-const txtDownloadLine = contentSrc.includes("downloadFile(txtFilename, txtOutput, 'text/plain;charset=utf-8')") ||
-  contentSrc.includes("downloadFile(txtFilename, textContent, 'text/plain;charset=utf-8')") ||
-  contentSrc.includes("downloadFile(txtFilename, infoHeader + textContent, 'text/plain;charset=utf-8')");
+const hasPendingExport = contentSrc.includes('__pendingExport') &&
+  contentSrc.includes('content: infoHeader + textContent');
+const hasPerformDownload = contentSrc.includes('function performDownload') &&
+  contentSrc.includes('downloadFile(pending.filename, pending.content, pending.mimeType)');
 
-if (hasExtractCall && txtDownloadLine) {
-  console.log('  VERIFIED: extractPureText output flows directly to downloadFile');
-  console.log('  VERIFIED: No intermediate transforms between extraction and download');
+if (hasExtractCall && hasPendingExport && hasPerformDownload) {
+  console.log('  VERIFIED: extractPureText output flows through pendingExport to downloadFile');
+  console.log('  VERIFIED: No encoding transforms between extraction and download');
 } else {
   console.log('  WARNING: Download path may have intermediate transforms');
   issues++;

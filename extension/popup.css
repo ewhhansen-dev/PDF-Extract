@@ -219,6 +219,80 @@ button:disabled {
   80%      { transform: translateX(2px); }
 }
 
+/* ── Preview container ── */
+
+#preview-container {
+  margin-top: 8px;
+  animation: fadeSlideIn 200ms ease both;
+}
+
+#preview-text {
+  background: #f8f9fa;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  padding: 8px 10px;
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 11px;
+  line-height: 1.4;
+  max-height: 120px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: #1a1a2e;
+  margin-bottom: 6px;
+}
+
+#preview-text.empty-preview {
+  color: #991b1b;
+  font-style: italic;
+  font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+#preview-stats {
+  font-size: 10px;
+  color: #68778d;
+  margin-bottom: 8px;
+  text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.preview-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.preview-actions button {
+  flex: 1;
+  text-align: center;
+  font-weight: 600;
+}
+
+#preview-download {
+  background-color: #7c3aed;
+  color: white;
+  border-color: #6d28d9;
+}
+
+#preview-download:hover:not(:disabled) {
+  background-color: #6d28d9;
+}
+
+#preview-download:active:not(:disabled) {
+  background-color: #5b21b6;
+}
+
+#preview-cancel {
+  background-color: #f0f0f5;
+  color: #68778d;
+  border-color: #d1d5db;
+}
+
+#preview-cancel:hover:not(:disabled) {
+  background-color: #e5e7eb;
+}
+
 /* Brave dark mode support (respects system/browser preference) */
 @media (prefers-color-scheme: dark) {
   body {
@@ -310,5 +384,39 @@ button:disabled {
 
   .shortcuts-hint {
     color: #6b7280;
+  }
+
+  #preview-text {
+    background: #2d2d3f;
+    border-color: #404060;
+    color: #e0e0e0;
+  }
+
+  #preview-text.empty-preview {
+    color: #fca5a5;
+  }
+
+  #preview-stats {
+    color: #a0aec0;
+  }
+
+  #preview-download {
+    background-color: #7c3aed;
+    border-color: #6d28d9;
+    color: white;
+  }
+
+  #preview-download:hover:not(:disabled) {
+    background-color: #8b5cf6;
+  }
+
+  #preview-cancel {
+    background-color: #2d2d3f;
+    border-color: #404060;
+    color: #a0aec0;
+  }
+
+  #preview-cancel:hover:not(:disabled) {
+    background-color: #3a3a52;
   }
 }

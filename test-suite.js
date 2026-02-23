@@ -75,7 +75,7 @@ test('popup.js exists and references all button IDs from popup.html', () => {
     htmlIds.push(match[1]);
   }
 
-  assert(htmlIds.length === 15, 'Must have exactly 15 button IDs, found ' + htmlIds.length);
+  assert(htmlIds.length === 17, 'Must have exactly 17 button IDs (15 action + 2 preview), found ' + htmlIds.length);
 
   for (const id of htmlIds) {
     assert(js.includes("'" + id + "'") || js.includes('"' + id + '"'),
@@ -910,9 +910,10 @@ test('content.js captures all selection ranges (not just first)', () => {
     'Must iterate over all selection ranges');
 });
 
-test('content.js checks for collapsed/empty selection', () => {
+test('content.js checks for empty selection using toString()', () => {
   const js = fs.readFileSync(path.join(EXT, 'content.js'), 'utf8');
-  assert(js.includes('isCollapsed'), 'Must check for collapsed selection');
+  assert(js.includes('selection.toString') || js.includes('toString()'),
+    'Must check selection via toString() for reliable detection');
 });
 
 // ═══════════════════════════════════════════════════════════════
@@ -1638,15 +1639,17 @@ test('text-extract.js batched selectors have fallback for invalid selectors', ()
 
 console.log('\n--- Section 15c: Debounce guard ---');
 
-test('content.js has conversion-in-progress guard', () => {
+test('content.js has conversion-in-progress guard with timestamp expiry', () => {
   const js = fs.readFileSync(path.join(EXT, 'content.js'), 'utf8');
   assert(js.includes('__conversionInProgress'),
     'Must have conversionInProgress guard');
-  // Must set to true at start and false in finally
-  assert(js.includes('__conversionInProgress = true'),
-    'Must lock at start of handleConversion');
-  assert(js.includes('__conversionInProgress = false'),
-    'Must unlock in finally block');
+  // Must use timestamp for auto-expiry (prevents permanent lock on crash)
+  assert(js.includes('Date.now()'),
+    'Must use timestamp-based debounce for auto-expiry');
+  assert(js.includes('30000'),
+    'Must have 30-second expiry timeout');
+  assert(js.includes('__conversionInProgress = 0'),
+    'Must unlock by setting to 0 (falsy)');
 });
 
 test('content.js debounce unlock is in finally block', () => {
@@ -1655,7 +1658,7 @@ test('content.js debounce unlock is in finally block', () => {
   assert(finallyIdx > 0, 'Must have a finally block');
   // The finally block should contain the debounce unlock
   const finallyBlock = js.substring(finallyIdx, finallyIdx + 200);
-  assert(finallyBlock.includes('__conversionInProgress = false'),
+  assert(finallyBlock.includes('__conversionInProgress = 0'),
     'Debounce unlock must be inside the finally block');
 });
 
@@ -1789,27 +1792,26 @@ test('content.js detectPaperSize returns a4 format as default', () => {
   assert(src.includes("format: 'a4'"), 'Must return a4 format as default');
 });
 
-test('content.js typewriter PDF uses detectPaperSize instead of hardcoded a4', () => {
+test('content.js typewriter PDF uses detectPaperSize via performDownload', () => {
   const src = fs.readFileSync(path.join(EXT, 'content.js'), 'utf8');
-  // The typewriter section should use detectPaperSize, not hardcoded 'a4'
-  const twStart = src.indexOf("format === 'pdf-typewriter'");
-  // Find the next "else if" after the typewriter section
-  const twEnd = src.indexOf('} else if', twStart + 1);
-  const twSection = src.substring(twStart, twEnd);
-  assert(twSection.includes('detectPaperSize()'), 'Typewriter PDF must call detectPaperSize()');
-  assert(twSection.includes('paperSize.format'), 'Typewriter PDF must use paperSize.format');
-  assert(twSection.includes('paperSize.width'), 'Typewriter PDF must use paperSize.width');
-  assert(twSection.includes('paperSize.height'), 'Typewriter PDF must use paperSize.height');
+  // Typewriter PDF generation now happens in performDownload
+  const dlStart = src.indexOf('async function performDownload');
+  assert(dlStart > 0, 'Must have performDownload function');
+  const dlBlock = src.substring(dlStart);
+  assert(dlBlock.includes('detectPaperSize()'), 'performDownload must call detectPaperSize()');
+  assert(dlBlock.includes('paperSize.format'), 'performDownload must use paperSize.format');
+  assert(dlBlock.includes('paperSize.width'), 'performDownload must use paperSize.width');
+  assert(dlBlock.includes('paperSize.height'), 'performDownload must use paperSize.height');
 });
 
-test('content.js screenshot PDF uses detectPaperSize instead of hardcoded a4', () => {
+test('content.js screenshot PDF uses detectPaperSize via performDownload', () => {
   const src = fs.readFileSync(path.join(EXT, 'content.js'), 'utf8');
-  // Find the screenshot PDF handler (the "else if (format === 'pdf')" branch)
-  const pdfStart = src.indexOf("} else if (format === 'pdf')");
-  const pdfEnd = src.indexOf("} else if (format === 'md')");
-  const pdfSection = src.substring(pdfStart, pdfEnd);
-  assert(pdfSection.includes('detectPaperSize()') || pdfSection.includes('screenshotPaper'),
-    'Screenshot PDF must use detected paper size');
+  // Screenshot PDF generation now happens in performDownload
+  const dlStart = src.indexOf('async function performDownload');
+  assert(dlStart > 0, 'Must have performDownload function');
+  const dlBlock = src.substring(dlStart);
+  assert(dlBlock.includes('screenshotPaper') || dlBlock.includes('detectPaperSize'),
+    'Screenshot PDF download must use detected paper size');
 });
 
 console.log('\n--- Section 16f: clipboard reliability improvements ---');
@@ -2075,6 +2077,173 @@ test('Combined multi-vector attack: all invisible types injected simultaneously'
   const output = sanitizeOutput(attack);
   assert(output === 'Hello world!\n', 'Multi-vector attack must be fully neutralized: got ' + JSON.stringify(output));
   assert(isCleanForTypewriter(output), 'Must be typewriter-clean after multi-vector attack');
+});
+
+// ═══════════════════════════════════════════════════════════════
+// SECTION 18: PREVIEW-BEFORE-DOWNLOAD FLOW
+// ═══════════════════════════════════════════════════════════════
+
+console.log('\n--- Section 18a: Preview flow in content.js ---');
+
+test('content.js handles download action', () => {
+  const js = fs.readFileSync(path.join(EXT, 'content.js'), 'utf8');
+  assert(js.includes("request.action === 'download'"), 'Must handle download action');
+  assert(js.includes('performDownload'), 'Must call performDownload');
+});
+
+test('content.js handles cancel action', () => {
+  const js = fs.readFileSync(path.join(EXT, 'content.js'), 'utf8');
+  assert(js.includes("request.action === 'cancel'"), 'Must handle cancel action');
+  assert(js.includes('__pendingExport = null'), 'Cancel must clear pending export');
+});
+
+test('content.js has performDownload function', () => {
+  const js = fs.readFileSync(path.join(EXT, 'content.js'), 'utf8');
+  assert(js.includes('async function performDownload'), 'Must define performDownload');
+  assert(js.includes('__pendingExport'), 'Must use pending export data');
+});
+
+test('content.js returns preview action for download formats', () => {
+  const js = fs.readFileSync(path.join(EXT, 'content.js'), 'utf8');
+  assert(js.includes("action: 'preview'"), 'Must return preview action');
+  // Preview should include text snippet and metadata
+  assert(js.includes('preview:'), 'Must include preview text');
+  assert(js.includes('totalChars:'), 'Must include total character count');
+  assert(js.includes('filename:'), 'Must include filename');
+});
+
+test('content.js stores pending export data for each format', () => {
+  const js = fs.readFileSync(path.join(EXT, 'content.js'), 'utf8');
+  assert(js.includes("type: 'file'"), 'Must store file type for txt/md');
+  assert(js.includes("type: 'pdf-typewriter'"), 'Must store pdf-typewriter type');
+  assert(js.includes("type: 'pdf-screenshot'"), 'Must store pdf-screenshot type');
+});
+
+test('content.js performDownload handles all pending export types', () => {
+  const js = fs.readFileSync(path.join(EXT, 'content.js'), 'utf8');
+  const dlStart = js.indexOf('async function performDownload');
+  const dlBlock = js.substring(dlStart);
+  assert(dlBlock.includes("pending.type === 'file'"), 'Must handle file type');
+  assert(dlBlock.includes("pending.type === 'pdf-typewriter'"), 'Must handle typewriter type');
+  assert(dlBlock.includes("pending.type === 'pdf-screenshot'"), 'Must handle screenshot type');
+});
+
+test('content.js performDownload clears pending export on success', () => {
+  const js = fs.readFileSync(path.join(EXT, 'content.js'), 'utf8');
+  const dlStart = js.indexOf('async function performDownload');
+  const dlBlock = js.substring(dlStart);
+  assert(dlBlock.includes('__pendingExport = null'), 'Must clear pending export after download');
+});
+
+test('content.js clipboard still works immediately (no preview)', () => {
+  const js = fs.readFileSync(path.join(EXT, 'content.js'), 'utf8');
+  const clipIdx = js.indexOf("format === 'clipboard'");
+  const clipBlock = js.substring(clipIdx, clipIdx + 200);
+  assert(clipBlock.includes("action: 'clipboard'"), 'Clipboard must return clipboard action directly');
+  assert(!clipBlock.includes("action: 'preview'"), 'Clipboard must NOT return preview action');
+});
+
+console.log('\n--- Section 18b: Preview UI in popup ---');
+
+test('popup.html has preview container', () => {
+  const html = fs.readFileSync(path.join(EXT, 'popup.html'), 'utf8');
+  assert(html.includes('preview-container'), 'Must have preview-container element');
+  assert(html.includes('preview-text'), 'Must have preview-text element');
+  assert(html.includes('preview-stats'), 'Must have preview-stats element');
+  assert(html.includes('preview-download'), 'Must have preview-download button');
+  assert(html.includes('preview-cancel'), 'Must have preview-cancel button');
+});
+
+test('popup.js handles preview response from content script', () => {
+  const js = fs.readFileSync(path.join(EXT, 'popup.js'), 'utf8');
+  assert(js.includes("response.action === 'preview'"), 'Must check for preview action');
+  assert(js.includes('showPreview'), 'Must call showPreview');
+});
+
+test('popup.js has showPreview function', () => {
+  const js = fs.readFileSync(path.join(EXT, 'popup.js'), 'utf8');
+  assert(js.includes('function showPreview'), 'Must define showPreview');
+  assert(js.includes('preview-container'), 'showPreview must reference preview container');
+  assert(js.includes('preview-text'), 'showPreview must reference preview text area');
+});
+
+test('popup.js has resetPreview function', () => {
+  const js = fs.readFileSync(path.join(EXT, 'popup.js'), 'utf8');
+  assert(js.includes('function resetPreview'), 'Must define resetPreview');
+});
+
+test('popup.js preview Download button sends download action', () => {
+  const js = fs.readFileSync(path.join(EXT, 'popup.js'), 'utf8');
+  assert(js.includes("action: 'download'"), 'Must send download action on confirm');
+});
+
+test('popup.js preview Cancel button sends cancel action', () => {
+  const js = fs.readFileSync(path.join(EXT, 'popup.js'), 'utf8');
+  assert(js.includes("action: 'cancel'"), 'Must send cancel action on reject');
+});
+
+test('popup.css has preview container styles', () => {
+  const css = fs.readFileSync(path.join(EXT, 'popup.css'), 'utf8');
+  assert(css.includes('#preview-container'), 'Must style preview container');
+  assert(css.includes('#preview-text'), 'Must style preview text');
+  assert(css.includes('#preview-stats'), 'Must style preview stats');
+  assert(css.includes('#preview-download'), 'Must style preview download button');
+  assert(css.includes('#preview-cancel'), 'Must style preview cancel button');
+  assert(css.includes('.preview-actions'), 'Must style preview action buttons');
+});
+
+test('popup.css has dark mode styles for preview', () => {
+  const css = fs.readFileSync(path.join(EXT, 'popup.css'), 'utf8');
+  const darkSection = css.substring(css.indexOf('prefers-color-scheme: dark'));
+  assert(darkSection.includes('#preview-text'), 'Dark mode must style preview text');
+  assert(darkSection.includes('#preview-download'), 'Dark mode must style preview download button');
+  assert(darkSection.includes('#preview-cancel'), 'Dark mode must style preview cancel button');
+});
+
+test('popup.css preview text uses monospace font', () => {
+  const css = fs.readFileSync(path.join(EXT, 'popup.css'), 'utf8');
+  const previewTextIdx = css.indexOf('#preview-text {');
+  const previewTextBlock = css.substring(previewTextIdx, previewTextIdx + 300);
+  assert(previewTextBlock.includes('Courier') || previewTextBlock.includes('monospace'),
+    'Preview text must use monospace font');
+});
+
+test('popup.css preview text has empty-preview state', () => {
+  const css = fs.readFileSync(path.join(EXT, 'popup.css'), 'utf8');
+  assert(css.includes('.empty-preview'), 'Must have empty-preview style');
+});
+
+console.log('\n--- Section 18c: Background.js auto-download for context menu/shortcuts ---');
+
+test('background.js auto-downloads on preview response (skips popup preview)', () => {
+  const js = fs.readFileSync(path.join(EXT, 'background.js'), 'utf8');
+  assert(js.includes("response.action === 'preview'"),
+    'Must detect preview response from content script');
+  assert(js.includes("action: 'download'"),
+    'Must send download action immediately after preview');
+});
+
+console.log('\n--- Section 18d: Reduced safety timeout ---');
+
+test('popup.js has reduced safety timeout (8 seconds or less)', () => {
+  const js = fs.readFileSync(path.join(EXT, 'popup.js'), 'utf8');
+  assert(js.includes('safetyTimer'), 'Must have safety timer');
+  // Find the timeout value near safetyTimer: }, <number>);
+  const timerIdx = js.indexOf('safetyTimer');
+  const timerBlock = js.substring(timerIdx, timerIdx + 400);
+  const match = timerBlock.match(/},\s*(\d+)\s*\)/);
+  assert(match, 'Must find timeout value near safetyTimer');
+  const ms = parseInt(match[1], 10);
+  assert(ms <= 10000, 'Safety timeout must be 10s or less, got ' + ms + 'ms');
+});
+
+console.log('\n--- Section 18e: Selection detection improvement ---');
+
+test('content.js uses toString() for selection detection', () => {
+  const js = fs.readFileSync(path.join(EXT, 'content.js'), 'utf8');
+  assert(js.includes('selection.toString'), 'Must use toString() to check selection text');
+  assert(js.includes("'Page' scope") || js.includes('"Page" scope'),
+    'Error message must suggest Page scope as fallback');
 });
 
 // ═══════════════════════════════════════════════════════════════

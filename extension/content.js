@@ -3,6 +3,10 @@
  *
  * Orchestrates conversion for all formats.
  * Delegates pure text extraction to text-extract.js.
+ *
+ * Flow: extract -> preview -> confirm download
+ * Popup gets a preview before downloading. Context menu / keyboard shortcuts
+ * skip the preview and download directly via background.js.
  */
 
 if (!window.__contentConverterLoaded) {
@@ -17,16 +21,32 @@ if (!window.__contentConverterLoaded) {
       });
       return true; // keep message channel open for async response
     }
+    if (request.action === 'download') {
+      performDownload().then(function (result) {
+        sendResponse(result);
+      }).catch(function (err) {
+        sendResponse({ success: false, error: err.message || String(err) });
+      });
+      return true;
+    }
+    if (request.action === 'cancel') {
+      window.__pendingExport = null;
+      sendResponse({ success: true });
+      return true;
+    }
   });
 }
 
 async function handleConversion(format, scope) {
   // Debounce: prevent multiple concurrent invocations from double-clicks,
-  // rapid keyboard shortcuts, or context menu spam
-  if (window.__conversionInProgress) {
+  // rapid keyboard shortcuts, or context menu spam.
+  // Uses timestamp with 30-second auto-expiry to prevent permanent lock
+  // if a previous conversion crashed without clearing the flag.
+  var now = Date.now();
+  if (window.__conversionInProgress && (now - window.__conversionInProgress) < 30000) {
     return { success: false, error: 'Conversion already in progress.' };
   }
-  window.__conversionInProgress = true;
+  window.__conversionInProgress = now;
   var element;
 
   try {
@@ -35,8 +55,14 @@ async function handleConversion(format, scope) {
 
     if (scope === 'selection') {
       var selection = window.getSelection();
-      if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
-        var noSelMsg = 'No text selected. Please select some content first.';
+      // Use toString() instead of isCollapsed for more reliable selection detection.
+      // isCollapsed can return true in edge cases (shadow DOM, certain frameworks)
+      // even when text is visually selected.
+      var selText = selection ? selection.toString().trim() : '';
+
+      if (!selText) {
+        var noSelMsg = 'No text selected. Highlight text on the page, then try again. ' +
+          'If this persists, try "Page" scope instead.';
         showNotice(noSelMsg, 'warn');
         return { success: false, error: noSelMsg };
       }
@@ -134,35 +160,36 @@ async function handleConversion(format, scope) {
     if (format === 'txt') {
       var infoHeader = buildInfoHeader(document.title, window.location.href, scopeLabel, format);
       var txtFilename = smartName + '_' + timestamp + '.txt';
-      downloadFile(txtFilename, infoHeader + textContent, 'text/plain;charset=utf-8');
+      window.__pendingExport = {
+        type: 'file',
+        filename: txtFilename,
+        content: infoHeader + textContent,
+        mimeType: 'text/plain;charset=utf-8'
+      };
+      return {
+        success: true,
+        action: 'preview',
+        preview: textContent.substring(0, 300),
+        totalChars: textContent.length,
+        filename: txtFilename
+      };
 
     } else if (format === 'pdf-typewriter') {
       var twHeader = buildInfoHeader(document.title, window.location.href, scopeLabel, format);
       var twFilename = smartName + '_typewriter_' + timestamp + '.pdf';
       var twOutput = twHeader + textContent;
-      var jsPDFConstructor = window.jspdf.jsPDF;
-      var paperSize = detectPaperSize();
-      var doc = new jsPDFConstructor({ orientation: 'p', unit: 'mm', format: paperSize.format });
-
-      doc.setFont('Courier', 'normal');
-      doc.setFontSize(11);
-
-      var margin = { top: 25, bottom: 25, left: 20, right: 20 };
-      var contentWidth = paperSize.width - margin.left - margin.right;
-      var lineHeight = 5.5;
-      var lines = doc.splitTextToSize(twOutput, contentWidth);
-      var y = margin.top;
-
-      for (var li = 0; li < lines.length; li++) {
-        if (y + lineHeight > paperSize.height - margin.bottom) {
-          doc.addPage();
-          y = margin.top;
-        }
-        doc.text(lines[li], margin.left, y);
-        y += lineHeight;
-      }
-
-      doc.save(twFilename);
+      window.__pendingExport = {
+        type: 'pdf-typewriter',
+        filename: twFilename,
+        text: twOutput
+      };
+      return {
+        success: true,
+        action: 'preview',
+        preview: textContent.substring(0, 300),
+        totalChars: textContent.length,
+        filename: twFilename
+      };
 
     } else if (format === 'pdf') {
       var pdfFilename = smartName + '_screenshot_' + timestamp + '.pdf';
@@ -186,7 +213,7 @@ async function handleConversion(format, scope) {
           'warn'
         );
         // Reset debounce and cleanup before recursive fallback
-        window.__conversionInProgress = false;
+        window.__conversionInProgress = 0;
         if (element && element._isTemp) { element.remove(); element = null; }
         return handleConversion('pdf-typewriter', scope);
       }
@@ -209,33 +236,27 @@ async function handleConversion(format, scope) {
             'warn'
           );
           // Reset debounce and cleanup before recursive fallback
-          window.__conversionInProgress = false;
+          window.__conversionInProgress = 0;
           if (element && element._isTemp) { element.remove(); element = null; }
           return handleConversion('pdf-typewriter', scope);
         }
       }
 
-      var jsPDFCtor = window.jspdf.jsPDF;
-      var screenshotPaper = detectPaperSize();
-      var imgWidth = screenshotPaper.width;
-      var pageHeight = screenshotPaper.height;
-      var imgHeight = canvas.height * imgWidth / canvas.width;
-      var heightLeft = imgHeight;
-
-      var pdfDoc = new jsPDFCtor('p', 'mm', screenshotPaper.format);
-      var position = 0;
-
-      pdfDoc.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
-      heightLeft -= pageHeight;
-
-      while (heightLeft > 0) {
-        position -= pageHeight;
-        pdfDoc.addPage();
-        pdfDoc.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
-        heightLeft -= pageHeight;
-      }
-
-      pdfDoc.save(pdfFilename);
+      window.__pendingExport = {
+        type: 'pdf-screenshot',
+        filename: pdfFilename,
+        imgData: imgData,
+        canvasWidth: canvas.width,
+        canvasHeight: canvas.height
+      };
+      return {
+        success: true,
+        action: 'preview',
+        preview: textContent ? textContent.substring(0, 300) : '',
+        totalChars: textContent ? textContent.length : 0,
+        filename: pdfFilename,
+        isScreenshot: true
+      };
 
     } else if (format === 'md') {
       var mdFilename = smartName + '_' + timestamp + '.md';
@@ -248,7 +269,19 @@ async function handleConversion(format, scope) {
         'Date:   ' + sanitizeHeaderField(new Date().toLocaleString()) + '\n' +
         'Scope:  ' + sanitizeHeaderField(scopeLabel) + '\n' +
         '-->\n\n';
-      downloadFile(mdFilename, mdHeader + markdown, 'text/markdown;charset=utf-8');
+      window.__pendingExport = {
+        type: 'file',
+        filename: mdFilename,
+        content: mdHeader + markdown,
+        mimeType: 'text/markdown;charset=utf-8'
+      };
+      return {
+        success: true,
+        action: 'preview',
+        preview: markdown.substring(0, 300),
+        totalChars: markdown.length,
+        filename: mdFilename
+      };
 
     } else {
       var unknownMsg = 'Unknown format: ' + format;
@@ -256,18 +289,89 @@ async function handleConversion(format, scope) {
       return { success: false, error: unknownMsg };
     }
 
-    return { success: true, action: format };
-
   } catch (e) {
     console.error('Conversion failed:', e);
     var failMsg = 'Conversion failed: ' + e.message;
     showNotice(failMsg, 'error');
     return { success: false, error: failMsg };
   } finally {
-    window.__conversionInProgress = false;
+    window.__conversionInProgress = 0;
     if (element && element._isTemp) {
       element.remove();
     }
+  }
+}
+
+// --- PERFORM PENDING DOWNLOAD ---
+// Called after user confirms the preview in the popup,
+// or immediately by background.js for context menu / keyboard shortcuts.
+
+async function performDownload() {
+  var pending = window.__pendingExport;
+  if (!pending) {
+    return { success: false, error: 'No pending export. Please extract content first.' };
+  }
+
+  try {
+    if (pending.type === 'file') {
+      downloadFile(pending.filename, pending.content, pending.mimeType);
+
+    } else if (pending.type === 'pdf-typewriter') {
+      var jsPDFConstructor = window.jspdf.jsPDF;
+      var paperSize = detectPaperSize();
+      var doc = new jsPDFConstructor({ orientation: 'p', unit: 'mm', format: paperSize.format });
+
+      doc.setFont('Courier', 'normal');
+      doc.setFontSize(11);
+
+      var margin = { top: 25, bottom: 25, left: 20, right: 20 };
+      var contentWidth = paperSize.width - margin.left - margin.right;
+      var lineHeight = 5.5;
+      var lines = doc.splitTextToSize(pending.text, contentWidth);
+      var y = margin.top;
+
+      for (var li = 0; li < lines.length; li++) {
+        if (y + lineHeight > paperSize.height - margin.bottom) {
+          doc.addPage();
+          y = margin.top;
+        }
+        doc.text(lines[li], margin.left, y);
+        y += lineHeight;
+      }
+
+      doc.save(pending.filename);
+
+    } else if (pending.type === 'pdf-screenshot') {
+      var jsPDFCtor = window.jspdf.jsPDF;
+      var screenshotPaper = detectPaperSize();
+      var imgWidth = screenshotPaper.width;
+      var pageHeight = screenshotPaper.height;
+      var imgHeight = pending.canvasHeight * imgWidth / pending.canvasWidth;
+      var heightLeft = imgHeight;
+
+      var pdfDoc = new jsPDFCtor('p', 'mm', screenshotPaper.format);
+      var position = 0;
+
+      pdfDoc.addImage(pending.imgData, 'PNG', 0, position, imgWidth, imgHeight);
+      heightLeft -= pageHeight;
+
+      while (heightLeft > 0) {
+        position -= pageHeight;
+        pdfDoc.addPage();
+        pdfDoc.addImage(pending.imgData, 'PNG', 0, position, imgWidth, imgHeight);
+        heightLeft -= pageHeight;
+      }
+
+      pdfDoc.save(pending.filename);
+    }
+
+    window.__pendingExport = null;
+    showNotice('Downloaded!', 'success');
+    return { success: true, action: 'downloaded' };
+
+  } catch (e) {
+    console.error('Download failed:', e);
+    return { success: false, error: 'Download failed: ' + e.message };
   }
 }
 
