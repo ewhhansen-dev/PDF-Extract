@@ -34,7 +34,13 @@ h4 {
   display: flex;
   flex-direction: column;
   gap: 4px;
+  animation: fadeSlideIn 250ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
+
+.button-group:nth-child(2) { animation-delay: 30ms; }
+.button-group:nth-child(3) { animation-delay: 60ms; }
+.button-group:nth-child(4) { animation-delay: 90ms; }
+.button-group:nth-child(5) { animation-delay: 120ms; }
 
 /* Green accent for clipboard actions */
 .button-group.clipboard-group button {
@@ -76,15 +82,21 @@ button {
   font-size: 12px;
   font-weight: 500;
   text-align: left;
-  transition: background-color 0.1s;
+  transition: transform 150ms cubic-bezier(0.22, 1, 0.36, 1),
+              background-color 0.15s ease,
+              box-shadow 0.15s ease,
+              opacity 0.2s ease;
 }
 
-button:hover {
+button:hover:not(:disabled) {
   background-color: #e5e7eb;
+  transform: scale(1.015);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
 }
 
-button:active {
+button:active:not(:disabled) {
   background-color: #d1d5db;
+  transform: scale(0.97);
 }
 
 /* Modal/Popup group styling - orange accent to stand out */
@@ -116,12 +128,39 @@ button:active {
   background-color: #eff6ff;
   color: #1e40af;
   border: 1px solid #bfdbfe;
+  animation: fadeSlideIn 200ms ease both;
+}
+
+#status-msg.status-loading::before {
+  content: '';
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #1e40af;
+  margin-right: 6px;
+  vertical-align: middle;
+  animation: pulseDot 1s ease-in-out infinite;
 }
 
 #status-msg.status-success {
   background-color: #ecfdf5;
   color: #065f46;
   border: 1px solid #a7f3d0;
+  animation: fadeSlideIn 200ms ease both;
+}
+
+#status-msg.status-success::before {
+  content: '';
+  display: inline-block;
+  width: 10px;
+  height: 6px;
+  border-left: 2px solid #065f46;
+  border-bottom: 2px solid #065f46;
+  transform: rotate(-45deg);
+  margin-right: 6px;
+  vertical-align: middle;
+  animation: checkPop 300ms ease-out;
 }
 
 button:focus-visible {
@@ -143,6 +182,7 @@ button:disabled {
   border-radius: 6px;
   font-size: 11px;
   line-height: 1.4;
+  animation: shake 400ms ease-out, fadeSlideIn 200ms ease both;
 }
 
 .shortcuts-hint {
@@ -151,6 +191,32 @@ button:disabled {
   font-size: 10px;
   color: #9ca3af;
   letter-spacing: 0.3px;
+}
+
+/* ── Animations (from improve-ui-performance branch) ── */
+
+@keyframes fadeSlideIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes pulseDot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%      { opacity: 0.4; transform: scale(0.7); }
+}
+
+@keyframes checkPop {
+  0%   { opacity: 0; transform: rotate(-45deg) scale(0); }
+  60%  { transform: rotate(-45deg) scale(1.15); }
+  100% { opacity: 1; transform: rotate(-45deg) scale(1); }
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  20%      { transform: translateX(-4px); }
+  40%      { transform: translateX(4px); }
+  60%      { transform: translateX(-2px); }
+  80%      { transform: translateX(2px); }
 }
 
 /* Brave dark mode support (respects system/browser preference) */
