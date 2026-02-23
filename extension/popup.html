@@ -1,29 +1,56 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
+  <meta charset="UTF-8">
   <link rel="stylesheet" href="popup.css">
 </head>
 <body>
-  <div class="container">
-    <h2>Converter</h2>
-    <div class="group group-pdf">
-      <h3>PDF</h3>
-      <button id="pdf-page">Save Page</button>
-      <button id="pdf-selection">Save Selection</button>
-    </div>
-    <div class="group group-md">
-      <h3>Markdown</h3>
-      <button id="md-page">Save Page</button>
-      <button id="md-selection">Save Selection</button>
-    </div>
-    <div class="group group-text">
-      <h3>Text</h3>
-      <button id="text-page">Save Page</button>
-      <button id="text-selection">Save Selection</button>
-    </div>
-    <div id="status" aria-live="polite"></div>
+  <h3>Extract Content</h3>
+
+  <div class="button-group clipboard-group">
+    <h4>Copy to Clipboard</h4>
+    <button id="clip-page" title="Copy purified text from the entire page to clipboard (Ctrl+Shift+Y)">Copy Page Text</button>
+    <button id="clip-selection" title="Copy purified text from your highlighted selection to clipboard">Copy Selection Text</button>
+    <button id="clip-modal" title="Copy purified text from an open popup, modal, or preview window to clipboard">Copy Popup Text</button>
   </div>
+
+  <div class="button-group primary">
+    <h4>Pure Text (Typewriter)</h4>
+    <button id="txt-page" title="Download entire page as a clean .txt file with metadata header (Ctrl+Shift+U)">Page to .txt</button>
+    <button id="txt-selection" title="Download your highlighted selection as a clean .txt file">Selection to .txt</button>
+    <button id="pdf-typewriter-page" title="Download page as a text PDF in Courier font - selectable and searchable (Ctrl+Shift+E)">Page to Typewriter PDF</button>
+    <button id="pdf-typewriter-selection" title="Download selection as a searchable text PDF in Courier font">Selection to Typewriter PDF</button>
+  </div>
+
+  <div class="button-group modal-group">
+    <h4>Popup / Preview Window</h4>
+    <button id="txt-modal" title="Download text from an open popup, modal, or file preview as .txt">Popup to .txt</button>
+    <button id="pdf-typewriter-modal" title="Download popup/modal text as a searchable PDF in Courier font">Popup to Typewriter PDF</button>
+    <button id="md-modal" title="Download popup/modal content as Markdown preserving headings and links">Popup to Markdown</button>
+    <button id="pdf-modal" title="Visual screenshot of the popup/modal window as a PDF image">Popup to Screenshot PDF</button>
+  </div>
+
+  <div class="button-group">
+    <h4>Standard</h4>
+    <button id="pdf-page" title="Visual screenshot of the entire page as a PDF image (not searchable)">Page to Screenshot PDF</button>
+    <button id="pdf-selection" title="Visual screenshot of your selection as a PDF image">Selection to Screenshot PDF</button>
+    <button id="md-page" title="Download page as Markdown preserving headings, links, and formatting">Page to Markdown</button>
+    <button id="md-selection" title="Download selection as Markdown preserving formatting">Selection to Markdown</button>
+  </div>
+
+  <div id="preview-container" style="display:none;">
+    <h4>Preview</h4>
+    <div id="preview-text"></div>
+    <div id="preview-stats"></div>
+    <div class="preview-actions">
+      <button id="preview-download">Download</button>
+      <button id="preview-cancel">Cancel</button>
+    </div>
+  </div>
+
+  <div id="status-msg" style="display:none;"></div>
+  <div id="error-msg" style="display:none;"></div>
+  <div class="shortcuts-hint">Ctrl+Shift+Y copy | Ctrl+Shift+U .txt | Ctrl+Shift+E pdf</div>
   <script src="popup.js"></script>
 </body>
 </html>
