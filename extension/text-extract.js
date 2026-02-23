@@ -183,9 +183,13 @@
   /**
    * Extract typewriter-grade pure text from a DOM element.
    * @param {Element} rootElement - The element to extract from
+   * @param {Object} [options] - Extraction options
+   * @param {boolean} [options.preserveWhitespace] - If true, preserve indentation
+   *   and whitespace structure (for clipboard/code). Still strips invisible chars.
    * @returns {string} Clean plain text, guaranteed free of hidden encodings
    */
-  window.extractPureText = function (rootElement) {
+  window.extractPureText = function (rootElement, options) {
+    options = options || {};
     // Phase -1: Extract text from same-origin iframes before cloning.
     // Iframes are removed during cleanup, so we harvest their content first.
     var iframeTexts = extractSameOriginIframes(rootElement);
@@ -215,7 +219,7 @@
       if (iframeTexts) {
         result += '\n\n' + iframeTexts;
       }
-      return sanitizeOutput(result);
+      return sanitizeOutput(result, options.preserveWhitespace);
     }
 
     // Phase 4: Extract with structure awareness
@@ -226,8 +230,10 @@
       rawText += '\n\n' + iframeTexts;
     }
 
-    // Phase 5: Sanitize to typewriter-grade purity
-    return sanitizeOutput(rawText);
+    // Phase 5: Sanitize output
+    // preserveWhitespace=true keeps indentation intact (for clipboard/code)
+    // preserveWhitespace=false (default) produces typewriter-grade purity
+    return sanitizeOutput(rawText, options.preserveWhitespace);
   };
 
   // --- PHASE -1: SAME-ORIGIN IFRAME EXTRACTION ---
@@ -577,7 +583,7 @@
   // This is the defense against hidden encodings, embeddings,
   // and anything not typeable on a physical typewriter.
 
-  function sanitizeOutput(text) {
+  function sanitizeOutput(text, preserveWhitespace) {
     // Step 1: Strip all control characters except tab, newline, carriage return
     text = text.replace(CONTROL_CHARS, '');
 
@@ -603,7 +609,7 @@
     text = text.replace(/\u2026/g, '...');
     // Bullets -> hyphen
     text = text.replace(/[\u2022\u2023\u25E6\u2043\u2219\u25AA\u25AB\u25CF\u25CB]/g, '-');
-    // Various spaces -> regular space
+    // Various spaces -> regular space (but NOT tabs -- tabs are real whitespace)
     text = text.replace(/[\u00A0\u2000-\u200A\u202F\u205F\u3000]/g, ' ');
     // Fraction slash -> regular slash
     text = text.replace(/\u2044/g, '/');
@@ -614,14 +620,20 @@
     text = text.replace(/\r\n/g, '\n');
     text = text.replace(/\r/g, '\n');
 
-    // Step 7: Collapse multiple spaces on same line to single space
-    text = text.replace(/[^\S\n]+/g, ' ');
+    // Steps 7-9: Whitespace normalization
+    // When preserveWhitespace is true (clipboard/code), skip these steps
+    // to keep indentation, tabs, and multi-space alignment intact.
+    // All invisible/encoding chars are already stripped by steps 1-4 above.
+    if (!preserveWhitespace) {
+      // Step 7: Collapse multiple spaces on same line to single space
+      text = text.replace(/[^\S\n]+/g, ' ');
 
-    // Step 8: Trim trailing whitespace on each line
-    text = text.replace(/ +$/gm, '');
+      // Step 8: Trim trailing whitespace on each line
+      text = text.replace(/ +$/gm, '');
 
-    // Step 9: Trim leading whitespace on each line
-    text = text.replace(/^ +/gm, '');
+      // Step 9: Trim leading whitespace on each line
+      text = text.replace(/^ +/gm, '');
+    }
 
     // Step 10: Collapse 3+ consecutive blank lines into 2
     text = text.replace(/\n{4,}/g, '\n\n\n');

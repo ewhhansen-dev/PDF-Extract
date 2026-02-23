@@ -384,7 +384,8 @@ test('content.js uses markdown comment header for .md files', () => {
 test('content.js clipboard does NOT get info header', () => {
   const js = fs.readFileSync(path.join(EXT, 'content.js'), 'utf8');
   // clipboard handler should write textContent directly, not infoHeader + textContent
-  const clipIdx = js.indexOf("format === 'clipboard'");
+  // Use "if (format === 'clipboard')" to find the handler block, not the extractOpts line
+  const clipIdx = js.indexOf("if (format === 'clipboard')");
   const clipBlock = js.substring(clipIdx, clipIdx + 200);
   assert(clipBlock.includes('textContent') && !clipBlock.includes('infoHeader'),
     'Clipboard must copy raw text without info header');
@@ -2137,7 +2138,8 @@ test('content.js performDownload clears pending export on success', () => {
 
 test('content.js clipboard still works immediately (no preview)', () => {
   const js = fs.readFileSync(path.join(EXT, 'content.js'), 'utf8');
-  const clipIdx = js.indexOf("format === 'clipboard'");
+  // Use "if (format === 'clipboard')" to find the handler block, not the extractOpts line
+  const clipIdx = js.indexOf("if (format === 'clipboard')");
   const clipBlock = js.substring(clipIdx, clipIdx + 200);
   assert(clipBlock.includes("action: 'clipboard'"), 'Clipboard must return clipboard action directly');
   assert(!clipBlock.includes("action: 'preview'"), 'Clipboard must NOT return preview action');
@@ -2244,6 +2246,94 @@ test('content.js uses toString() for selection detection', () => {
   assert(js.includes('selection.toString'), 'Must use toString() to check selection text');
   assert(js.includes("'Page' scope") || js.includes('"Page" scope'),
     'Error message must suggest Page scope as fallback');
+});
+
+// ═══════════════════════════════════════════════════════════════
+// Section 19: preserveWhitespace for clipboard formatting
+// ═══════════════════════════════════════════════════════════════
+
+console.log('\n--- Section 19a: text-extract.js preserveWhitespace support ---');
+
+test('extractPureText accepts options parameter with preserveWhitespace', () => {
+  const js = fs.readFileSync(path.join(EXT, 'text-extract.js'), 'utf8');
+  assert(js.includes('function (rootElement, options)') || js.includes('function(rootElement, options)'),
+    'extractPureText must accept options parameter');
+  assert(js.includes('options = options || {}'),
+    'Must default options to empty object');
+  assert(js.includes('options.preserveWhitespace'),
+    'Must reference options.preserveWhitespace');
+});
+
+test('sanitizeOutput accepts preserveWhitespace parameter', () => {
+  const js = fs.readFileSync(path.join(EXT, 'text-extract.js'), 'utf8');
+  assert(js.includes('function sanitizeOutput(text, preserveWhitespace)'),
+    'sanitizeOutput must accept preserveWhitespace parameter');
+});
+
+test('sanitizeOutput passes preserveWhitespace to skip steps 7-9', () => {
+  const js = fs.readFileSync(path.join(EXT, 'text-extract.js'), 'utf8');
+  assert(js.includes('if (!preserveWhitespace)'),
+    'Must conditionally skip whitespace normalization');
+  // Steps 7-9 (space collapse, trailing/leading trim) should be inside the conditional
+  const conditionalIdx = js.indexOf('if (!preserveWhitespace)');
+  const step7Idx = js.indexOf("text.replace(/[^\\S\\n]+/g, ' ')", conditionalIdx);
+  assert(step7Idx > conditionalIdx && step7Idx < conditionalIdx + 500,
+    'Step 7 (space collapse) must be inside preserveWhitespace conditional');
+});
+
+test('sanitizeOutput always runs steps 1-6 regardless of preserveWhitespace', () => {
+  const js = fs.readFileSync(path.join(EXT, 'text-extract.js'), 'utf8');
+  // Steps 1-4 (invisible char removal) must be BEFORE the preserveWhitespace check
+  const step1Idx = js.indexOf('text.replace(CONTROL_CHARS');
+  const step2Idx = js.indexOf('text.replace(INVISIBLE_CHARS');
+  const conditionalIdx = js.indexOf('if (!preserveWhitespace)');
+  assert(step1Idx < conditionalIdx, 'Step 1 (control chars) must run before preserveWhitespace check');
+  assert(step2Idx < conditionalIdx, 'Step 2 (invisible chars) must run before preserveWhitespace check');
+});
+
+test('sanitizeOutput always runs steps 10-13 regardless of preserveWhitespace', () => {
+  const js = fs.readFileSync(path.join(EXT, 'text-extract.js'), 'utf8');
+  // Steps 10+ (blank line collapse, trim, trailing newline, printable filter)
+  // must be AFTER the preserveWhitespace conditional block
+  const conditionalIdx = js.indexOf('if (!preserveWhitespace)');
+  const step10Idx = js.indexOf("text.replace(/\\n{4,}/g", conditionalIdx);
+  assert(step10Idx > conditionalIdx, 'Step 10 (blank line collapse) must run after preserveWhitespace block');
+  const step13Idx = js.indexOf('filterToPrintable(text)', conditionalIdx);
+  assert(step13Idx > conditionalIdx, 'Step 13 (printable filter) must run after preserveWhitespace block');
+});
+
+console.log('\n--- Section 19b: content.js clipboard preserveWhitespace ---');
+
+test('content.js creates extractOpts for clipboard format', () => {
+  const js = fs.readFileSync(path.join(EXT, 'content.js'), 'utf8');
+  assert(js.includes("format === 'clipboard'") && js.includes('preserveWhitespace: true'),
+    'Must set preserveWhitespace: true for clipboard format');
+  assert(js.includes('extractOpts'),
+    'Must use extractOpts variable');
+});
+
+test('content.js passes extractOpts to all extractPureText calls', () => {
+  const js = fs.readFileSync(path.join(EXT, 'content.js'), 'utf8');
+  // There should be 3 calls to extractPureText with extractOpts
+  const calls = js.match(/extractPureText\([^,]+,\s*extractOpts\)/g) || [];
+  assert(calls.length === 3,
+    'Must pass extractOpts to all 3 extractPureText calls (selection, modal, page), found ' + calls.length);
+});
+
+test('content.js extractOpts is undefined for non-clipboard formats', () => {
+  const js = fs.readFileSync(path.join(EXT, 'content.js'), 'utf8');
+  // extractOpts should be undefined (not false, not {}) when format !== 'clipboard'
+  assert(js.includes(": undefined") || js.includes(": undefined;"),
+    'extractOpts must be undefined for non-clipboard formats so extractPureText defaults apply');
+});
+
+test('content.js clipboard still strips invisible chars (only whitespace preserved)', () => {
+  const js = fs.readFileSync(path.join(EXT, 'content.js'), 'utf8');
+  // Even clipboard uses extractPureText which runs steps 1-6 and 10-13
+  // (invisible char removal, typography normalization, printable filter).
+  // Only steps 7-9 (whitespace collapse/trim) are skipped.
+  assert(js.includes("extractPureText(container, extractOpts)"),
+    'Clipboard extraction must still go through extractPureText sanitization');
 });
 
 // ═══════════════════════════════════════════════════════════════

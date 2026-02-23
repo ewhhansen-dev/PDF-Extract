@@ -53,6 +53,10 @@ async function handleConversion(format, scope) {
     var textContent;
     var htmlContent;
 
+    // Clipboard gets preserveWhitespace=true so pasted code keeps indentation.
+    // All other formats get full typewriter-grade whitespace normalization.
+    var extractOpts = (format === 'clipboard') ? { preserveWhitespace: true } : undefined;
+
     if (scope === 'selection') {
       var selection = window.getSelection();
       // Use toString() instead of isCollapsed for more reliable selection detection.
@@ -91,7 +95,7 @@ async function handleConversion(format, scope) {
       }
 
       if (typeof extractPureText === 'function') {
-        textContent = extractPureText(container);
+        textContent = extractPureText(container, extractOpts);
       } else {
         textContent = container.innerText || container.textContent || '';
       }
@@ -111,7 +115,7 @@ async function handleConversion(format, scope) {
       }
 
       if (typeof extractPureText === 'function') {
-        textContent = extractPureText(modalEl);
+        textContent = extractPureText(modalEl, extractOpts);
       } else {
         textContent = modalEl.innerText || modalEl.textContent || '';
       }
@@ -129,7 +133,7 @@ async function handleConversion(format, scope) {
       }
 
       if (typeof extractPureText === 'function') {
-        textContent = extractPureText(document.body);
+        textContent = extractPureText(document.body, extractOpts);
       } else {
         var clone = document.body.cloneNode(true);
         clone.querySelectorAll('script, style, noscript').forEach(function (n) { n.remove(); });
