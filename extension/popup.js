@@ -140,7 +140,7 @@ function handleInjectionError(errMsg, url) {
 
   // Brave Shields blocking script injection
   if (errMsg.includes('Cannot access') || errMsg.includes('cannot be scripted')) {
-    if (url && (url.includes('chrome.google.com') || url.includes('addons.mozilla.org'))) {
+    if (url && (url.includes('chrome.google.com/webstore') || url.includes('addons.mozilla.org') || url.includes('microsoftedge.microsoft.com/addons'))) {
       showError('Browser extension stores block all extensions from running scripts. Try a regular website.');
     } else {
       showError(
@@ -183,11 +183,7 @@ function showError(msg) {
   setButtonsDisabled(false);
 
   var el = document.getElementById('error-msg');
-  if (!el) {
-    el = document.createElement('div');
-    el.id = 'error-msg';
-    document.body.appendChild(el);
-  }
+  if (!el) return;
   el.textContent = msg;
   el.style.display = 'block';
 }

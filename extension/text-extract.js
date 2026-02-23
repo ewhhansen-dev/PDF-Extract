@@ -68,7 +68,7 @@
     'button[aria-label="Bad response"]',
 
     // Sidebar and aside
-    'aside', '[role="aside"]',
+    'aside',
     '[class*="sidebar"]', '[class*="Sidebar"]',
     '[class*="side-panel"]',
 
@@ -91,7 +91,6 @@
   var CHAT_CONTAINER_SELECTORS = [
     // ChatGPT (modern: Tailwind classes, data-testid on turns, main wrapper)
     'main [role="presentation"]',
-    'main .flex.flex-col',
     '[class*="conversation"]', '[class*="Conversation"]',
     'main [class*="thread"]', '[class*="Thread"]',
 
@@ -139,18 +138,17 @@
   // Used by processNode on every element during tree walk.
   // Hoisting avoids re-creating this object on each call.
   var BLOCK_ELEMENTS = {
-    'div':1, 'p':1, 'section':1, 'article':1, 'main':1, 'aside':1,
+    'div':1, 'p':1, 'section':1, 'article':1, 'main':1,
     'blockquote':1, 'figure':1, 'figcaption':1, 'details':1, 'summary':1,
     'ul':1, 'ol':1, 'li':1, 'dl':1, 'dt':1, 'dd':1,
     'table':1, 'thead':1, 'tbody':1, 'tfoot':1, 'tr':1,
     'h1':1, 'h2':1, 'h3':1, 'h4':1, 'h5':1, 'h6':1,
-    'address':1, 'fieldset':1, 'pre':1
+    'address':1, 'fieldset':1
   };
 
   // --- CODE BLOCK DETECTION ---
 
   var CODE_BLOCK_SELECTORS = [
-    'pre code', 'pre', '.highlight pre',
     '[class*="code-block"]', '[class*="CodeBlock"]',
     '[class*="codeBlock"]',
     '.hljs', '.prism-code', '.shiki',
@@ -166,7 +164,11 @@
   var CONTROL_CHARS = /[\x00-\x08\x0B\x0C\x0E-\x1F\x7F\x80-\x9F]/g;
 
   // Zero-width and invisible formatting characters
-  var INVISIBLE_CHARS = /[\u00AD\u034F\u061C\u115F\u1160\u17B4\u17B5\u180B-\u180E\u200B-\u200F\u202A-\u202E\u2060-\u2064\u2066-\u206F\uFE00-\uFE0F\uFEFF\uFFF0-\uFFF8\uFFF9-\uFFFB]/g;
+  // Includes: soft hyphen, combining grapheme joiner, Arabic/Syriac format chars,
+  // Hangul fillers, Khmer inherent vowels, Mongolian FVS, zero-width chars,
+  // bidi controls, invisible operators, Braille blank, variation selectors,
+  // BOM, halfwidth Hangul filler, specials, interlinear annotation, object replacement
+  var INVISIBLE_CHARS = /[\u00AD\u034F\u061C\u070F\u08E2\u115F\u1160\u17B4\u17B5\u180B-\u180E\u200B-\u200F\u202A-\u202E\u2060-\u206F\u2800\u3164\uFE00-\uFE0F\uFEFF\uFFA0\uFFF0-\uFFFC]/g;
 
   // Surrogate halves (should never appear in valid text)
   var SURROGATE_HALVES = /[\uD800-\uDFFF]/g;
@@ -300,9 +302,7 @@
   // so we catch the most common hide-by-class patterns explicitly.
   var HIDDEN_CLASS_SELECTORS = [
     '.hidden', '.d-none', '.d-hide', '.is-hidden', '.is-invisible',
-    '.collapse:not(.show)', '.invisible',
-    '[style*="display: none"]', '[style*="display:none"]',
-    '[style*="visibility: hidden"]', '[style*="visibility:hidden"]'
+    '.collapse:not(.show)', '.invisible'
   ];
 
   function removeHiddenElements(root) {
@@ -329,7 +329,9 @@
         (style.position === 'absolute' && style.left &&
           (parseInt(style.left, 10) < -999 || parseInt(style.top, 10) < -999)) ||
         (style.width === '0px' && style.height === '0px') ||
-        (style.overflow === 'hidden' && style.maxHeight === '0px')
+        (style.overflow === 'hidden' && style.maxHeight === '0px') ||
+        style.fontSize === '0' || style.fontSize === '0px' ||
+        (style.textIndent && parseInt(style.textIndent, 10) < -999)
       ) {
         el.remove();
       }
@@ -382,7 +384,7 @@
       }
     }
 
-    if (!chatContainer || messages.length < 2) return null;
+    if (messages.length < 2) return null;
 
     var lines = [];
     var msg, role, msgText, cleanText;
@@ -558,8 +560,6 @@
   function isCodeBlock(el) {
     var tag = el.tagName.toLowerCase();
     if (tag === 'pre') return true;
-    if (tag === 'code' && el.parentElement &&
-        el.parentElement.tagName.toLowerCase() === 'pre') return true;
 
     for (var i = 0; i < CODE_BLOCK_SELECTORS.length; i++) {
       try {
@@ -662,6 +662,16 @@
       // Skip other known invisible astral chars
       // Shorthand Format Controls (U+1BCA0-U+1BCA3)
       if (cp >= 0x1BCA0 && cp <= 0x1BCA3) {
+        i += 2;
+        continue;
+      }
+      // Musical Symbol format controls (U+1D173-U+1D17A)
+      if (cp >= 0x1D173 && cp <= 0x1D17A) {
+        i += 2;
+        continue;
+      }
+      // Egyptian Hieroglyph format controls (U+13430-U+1343F)
+      if (cp >= 0x13430 && cp <= 0x1343F) {
         i += 2;
         continue;
       }
