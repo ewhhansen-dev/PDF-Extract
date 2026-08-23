@@ -1168,7 +1168,7 @@ test('content.js showNotice supports error, warn, and success types', () => {
   const fnBlock = js.substring(fnStart, fnEnd);
   assert(fnBlock.includes("'error'") || fnBlock.includes('"error"'), 'Must handle error type');
   assert(fnBlock.includes("'warn'") || fnBlock.includes('"warn"'), 'Must handle warn type');
-  assert(fnBlock.includes('z-index'), 'Must use high z-index for visibility');
+  assert(fnBlock.includes('zIndex'), 'Must use high z-index for visibility');
 });
 
 test('content.js downloadFile uses non-bubbling click for SPA compatibility', () => {
