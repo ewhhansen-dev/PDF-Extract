@@ -10,6 +10,8 @@
 
 const fs = require('fs');
 const path = require('path');
+const vm = require('vm');
+const domino = require('@mixmark-io/domino');
 
 let passed = 0;
 let failed = 0;
@@ -425,6 +427,54 @@ test('text-extract.js calls extractSameOriginIframes before clone', () => {
 // ═══════════════════════════════════════════════════════════════
 
 console.log('\n--- Section 3: Text extraction engine integrity ---');
+
+test('text-extract.js extractStructured parses structured content (headings, lists, tables)', () => {
+  const js = fs.readFileSync(path.join(EXT, 'text-extract.js'), 'utf8');
+
+  // Dynamically export extractStructured out of the IIFE for testing
+  // We replace the final '})();' to inject our export
+  const codeModified = js.replace(
+    /\}\)\(\);\s*$/,
+    '  window.extractStructured = extractStructured;\n})();'
+  );
+
+  const html = `<html><body><div id="test">
+    <h1>Main Title</h1>
+    <p>A paragraph of text.</p>
+    <ul>
+      <li>First item</li>
+      <li>Second item</li>
+    </ul>
+    <table>
+      <tr>
+        <th>Col 1</th>
+        <th>Col 2</th>
+      </tr>
+      <tr>
+        <td>Val 1</td>
+        <td>Val 2</td>
+      </tr>
+    </table>
+  </div></body></html>`;
+
+  const window = domino.createWindow(html);
+  const context = vm.createContext({
+    window: window,
+    document: window.document,
+    Node: window.Node
+  });
+
+  vm.runInContext(codeModified, context);
+
+  const root = window.document.getElementById('test');
+  const res = context.window.extractStructured(root);
+
+  assert(res.includes('Main Title'), 'Output must contain heading text');
+  assert(res.includes('- First item'), 'Output must correctly format list items');
+  assert(res.includes('- Second item'), 'Output must correctly format list items');
+  assert(res.includes('Col 1\tCol 2'), 'Output must correctly format table headers with tabs');
+  assert(res.includes('Val 1\tVal 2'), 'Output must correctly format table rows with tabs');
+});
 
 test('text-extract.js has IIFE wrapper to prevent global pollution', () => {
   const js = fs.readFileSync(path.join(EXT, 'text-extract.js'), 'utf8');
