@@ -11,7 +11,6 @@
 const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
-const domino = require('@mixmark-io/domino');
 
 let passed = 0;
 let failed = 0;
@@ -261,7 +260,7 @@ test('content.js findActiveModal filters by visibility and content', () => {
   const js = fs.readFileSync(path.join(EXT, 'content.js'), 'utf8');
   assert(js.includes('getBoundingClientRect'), 'Must check element dimensions');
   assert(js.includes('getComputedStyle'), 'Must check computed visibility');
-  assert(js.includes('zIndex'), 'Must consider z-index for topmost modal');
+  assert(js.includes('zIndex'), 'Must consider zIndex for topmost modal');
 });
 
 test('content.js shows notice when no modal found', () => {
@@ -522,6 +521,35 @@ test('text-extract.js removes canvas elements', () => {
 test('text-extract.js removes nav elements', () => {
   const js = fs.readFileSync(path.join(EXT, 'text-extract.js'), 'utf8');
   assert(js.includes("'nav'"), 'Must strip nav elements');
+});
+
+const vm = require('vm');
+
+test('text-extract.js removeNonContent actually removes boilerplate elements', () => {
+  const js = fs.readFileSync(path.join(EXT, 'text-extract.js'), 'utf8');
+
+  // Inject export to access the internal function in the IIFE
+  const testJs = js.replace('})();', 'window.removeNonContent = removeNonContent; })();');
+
+  let removedNodes = 0;
+  const window = {};
+
+  // Mock DOM
+  const document = {
+    querySelectorAll: (selector) => {
+      if (selector.includes('nav') || selector.includes('footer')) {
+        return [{ remove: () => { removedNodes++; } }];
+      }
+      return [];
+    }
+  };
+
+  const context = vm.createContext({ window, document });
+  vm.runInContext(testJs, context);
+
+  window.removeNonContent(document);
+
+  assert(removedNodes > 0, 'Must call remove() on boilerplate elements like <nav>');
 });
 
 test('text-extract.js removes hidden elements (aria-hidden)', () => {
@@ -1218,7 +1246,7 @@ test('content.js showNotice supports error, warn, and success types', () => {
   const fnBlock = js.substring(fnStart, fnEnd);
   assert(fnBlock.includes("'error'") || fnBlock.includes('"error"'), 'Must handle error type');
   assert(fnBlock.includes("'warn'") || fnBlock.includes('"warn"'), 'Must handle warn type');
-  assert(fnBlock.includes('z-index'), 'Must use high z-index for visibility');
+  assert(fnBlock.includes('zIndex'), 'Must use high z-index for visibility');
 });
 
 test('content.js downloadFile uses non-bubbling click for SPA compatibility', () => {
@@ -2384,6 +2412,49 @@ test('content.js clipboard still strips invisible chars (only whitespace preserv
   // Only steps 7-9 (whitespace collapse/trim) are skipped.
   assert(js.includes("extractPureText(container, extractOpts)"),
     'Clipboard extraction must still go through extractPureText sanitization');
+});
+
+// ═══════════════════════════════════════════════════════════════
+// SECTION 20: MARKDOWN BODY SANITIZATION EDGE CASES
+// ═══════════════════════════════════════════════════════════════
+
+console.log('\n--- Section 20: Markdown body sanitization edge cases ---');
+
+// We use Node's vm module to test the actual implementation from content.js
+const contentCode = fs.readFileSync(path.join(EXT, 'content.js'), 'utf8');
+const contentContext = {
+  window: {},
+  navigator: { language: 'en-US' },
+  chrome: { runtime: { onMessage: { addListener: () => {} } } },
+  console: console
+};
+vm.createContext(contentContext);
+vm.runInContext(contentCode, contentContext);
+const realSanitizeMarkdownBody = contentContext.sanitizeMarkdownBody;
+
+test('sanitizeMarkdownBody handles null, undefined, and empty input', () => {
+  assert(realSanitizeMarkdownBody(null) === '', 'Null input must return empty string');
+  assert(realSanitizeMarkdownBody(undefined) === '', 'Undefined input must return empty string');
+  assert(realSanitizeMarkdownBody('') === '', 'Empty string must return empty string');
+});
+
+test('sanitizeMarkdownBody strips orphaned surrogates but preserves emoji', () => {
+  const emoji = '\uD83D\uDE00'; // 😀
+  assert(realSanitizeMarkdownBody('\uD83DHello') === 'Hello', 'Strip high surrogate at start');
+  assert(realSanitizeMarkdownBody('Hello\uD83D') === 'Hello', 'Strip high surrogate at end');
+  assert(realSanitizeMarkdownBody('A\uD83DB') === 'AB', 'Strip high surrogate in middle');
+  assert(realSanitizeMarkdownBody('\uDE00Hello') === 'Hello', 'Strip low surrogate at start');
+  assert(realSanitizeMarkdownBody('Hello\uDE00') === 'Hello', 'Strip low surrogate at end');
+  assert(realSanitizeMarkdownBody('A\uDE00B') === 'AB', 'Strip low surrogate in middle');
+  assert(realSanitizeMarkdownBody(emoji) === emoji, 'Preserve valid emoji');
+  assert(realSanitizeMarkdownBody('A' + emoji + 'B') === 'A' + emoji + 'B', 'Preserve emoji in text');
+});
+
+test('sanitizeMarkdownBody strips astral plane invisibles', () => {
+  const tag = String.fromCodePoint(0xE0001);
+  const musical = String.fromCodePoint(0x1D173);
+  assert(realSanitizeMarkdownBody('A' + tag + 'B') === 'AB', 'Strip Tag characters');
+  assert(realSanitizeMarkdownBody('A' + musical + 'B') === 'AB', 'Strip Musical Symbol format controls');
 });
 
 // ═══════════════════════════════════════════════════════════════
