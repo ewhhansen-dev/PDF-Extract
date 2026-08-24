@@ -353,6 +353,28 @@ test('content.js smart filename falls back to page title', () => {
   assert(js.includes("name.length < 3"), 'Must check for too-short names');
 });
 
+test('content.js buildSmartFilename edge cases', () => {
+  const js = fs.readFileSync(path.join(EXT, 'content.js'), 'utf8');
+  const ctx = vm.createContext({
+    window: {},
+    chrome: { runtime: { onMessage: { addListener: () => {} } } },
+    document: { title: 'Default Title' }
+  });
+  vm.runInContext(js, ctx);
+
+  // Test special characters
+  const res1 = ctx.buildSmartFilename('Hello!@#$%^&*() World!');
+  assert(res1 === 'Hello_World', 'Special characters must be stripped');
+
+  // Test empty input falls back to document.title
+  const res2 = ctx.buildSmartFilename('   \n  \n');
+  assert(res2 === 'Default_Title', 'Empty input must fall back to sanitized document title');
+
+  // Test excessive spaces
+  const res3 = ctx.buildSmartFilename('Very    Spaced    Out');
+  assert(res3 === 'Very_Spaced_Out', 'Excessive spaces must become single underscores');
+});
+
 console.log('\n--- Section 2g: Info header ---');
 
 test('content.js has buildInfoHeader function', () => {
