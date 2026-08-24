@@ -552,12 +552,20 @@ function showNotice(msg, type) {
   var bgColor = type === 'error' ? '#991b1b' : type === 'warn' ? '#92400e' : '#1a1a2e';
   var notice = document.createElement('div');
   notice.textContent = msg;
-  notice.style.cssText =
-    'position:fixed;top:20px;right:20px;z-index:2147483647;' +
-    'padding:12px 20px;max-width:360px;background:' + bgColor + ';color:#fff;' +
-    'border-radius:8px;font:600 14px Inter,system-ui,sans-serif;' +
-    'box-shadow:0 4px 12px rgba(0,0,0,0.3);transition:opacity 0.3s;' +
-    'pointer-events:none;line-height:1.4;';
+  notice.style.position = 'fixed';
+  notice.style.top = '20px';
+  notice.style.right = '20px';
+  notice.style.zIndex = '2147483647'; // z-index
+  notice.style.padding = '12px 20px';
+  notice.style.maxWidth = '360px';
+  notice.style.background = bgColor;
+  notice.style.color = '#fff';
+  notice.style.borderRadius = '8px';
+  notice.style.font = '600 14px Inter,system-ui,sans-serif';
+  notice.style.boxShadow = '0 4px 12px rgba(0,0,0,0.3)';
+  notice.style.transition = 'opacity 0.3s';
+  notice.style.pointerEvents = 'none';
+  notice.style.lineHeight = '1.4';
   document.body.appendChild(notice);
   var duration = type === 'error' ? 4000 : type === 'warn' ? 3000 : 1500;
   setTimeout(function () {
@@ -597,7 +605,10 @@ async function copyToClipboard(text) {
 function execCommandCopy(text) {
   var ta = document.createElement('textarea');
   ta.value = text;
-  ta.style.cssText = 'position:fixed;left:-9999px;top:-9999px;opacity:0;';
+  ta.style.position = 'fixed';
+  ta.style.left = '-9999px';
+  ta.style.top = '-9999px';
+  ta.style.opacity = '0';
   document.body.appendChild(ta);
   ta.focus();
   ta.select();

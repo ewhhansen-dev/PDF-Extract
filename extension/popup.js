@@ -17,7 +17,7 @@ const buttons = {
 };
 
 for (const [id, config] of Object.entries(buttons)) {
-  var btn = document.getElementById(id);
+  const btn = document.getElementById(id);
   if (btn) {
     btn.addEventListener('click', () => {
       injectAndRun(config.format, config.scope);
@@ -26,7 +26,7 @@ for (const [id, config] of Object.entries(buttons)) {
 }
 
 function showStatus(msg, type) {
-  var el = document.getElementById('status-msg');
+  const el = document.getElementById('status-msg');
   if (!el) return;
   el.className = 'status-' + type;
   el.textContent = (type === 'loading' ? '\u23F3 ' : '\u2705 ') + msg;
@@ -34,8 +34,8 @@ function showStatus(msg, type) {
 }
 
 function setButtonsDisabled(disabled) {
-  var btns = document.querySelectorAll('button');
-  for (var i = 0; i < btns.length; i++) {
+  const btns = document.querySelectorAll('button');
+  for (let i = 0; i < btns.length; i++) {
     btns[i].disabled = disabled;
   }
 }
@@ -46,7 +46,7 @@ function injectAndRun(format, scope) {
   setButtonsDisabled(true);
 
   // Hide any previous errors and preview
-  var errEl = document.getElementById('error-msg');
+  const errEl = document.getElementById('error-msg');
   if (errEl) errEl.style.display = 'none';
   resetPreview();
 
@@ -99,13 +99,13 @@ function injectAndRun(format, scope) {
       files: files
     }, () => {
       if (chrome.runtime.lastError) {
-        var errMsg = chrome.runtime.lastError.message || '';
+        const errMsg = chrome.runtime.lastError.message || '';
         console.error(errMsg);
         handleInjectionError(errMsg, url);
         return;
       }
-      var responded = false;
-      var safetyTimer = setTimeout(function () {
+      let responded = false;
+      const safetyTimer = setTimeout(function () {
         if (!responded) {
           responded = true;
           showError('Operation timed out. The page may have blocked the extension. Try again.');
@@ -133,7 +133,7 @@ function injectAndRun(format, scope) {
           showPreview(response, tabId);
           return;
         }
-        var successLabel = format === 'clipboard' ? 'Copied!' : 'Downloaded!';
+        const successLabel = format === 'clipboard' ? 'Copied!' : 'Downloaded!';
         showStatus(successLabel, 'success');
         setTimeout(function () { window.close(); }, 900);
       });
@@ -184,11 +184,11 @@ function handleInjectionError(errMsg, url) {
 
 function showError(msg) {
   // Reset loading state
-  var statusEl = document.getElementById('status-msg');
+  const statusEl = document.getElementById('status-msg');
   if (statusEl) statusEl.style.display = 'none';
   setButtonsDisabled(false);
 
-  var el = document.getElementById('error-msg');
+  const el = document.getElementById('error-msg');
   if (!el) return;
   el.textContent = msg;
   el.style.display = 'block';
@@ -200,16 +200,16 @@ function showError(msg) {
 
 function showPreview(data, tabId) {
   // Hide loading status
-  var statusEl = document.getElementById('status-msg');
+  const statusEl = document.getElementById('status-msg');
   if (statusEl) statusEl.style.display = 'none';
 
-  var container = document.getElementById('preview-container');
-  var textEl = document.getElementById('preview-text');
-  var statsEl = document.getElementById('preview-stats');
+  const container = document.getElementById('preview-container');
+  const textEl = document.getElementById('preview-text');
+  const statsEl = document.getElementById('preview-stats');
   if (!container || !textEl || !statsEl) return;
 
   // Show preview text
-  var previewStr = (data.preview || '').trim();
+  const previewStr = (data.preview || '').trim();
   if (previewStr.length > 0) {
     textEl.textContent = previewStr + (data.totalChars > 300 ? '...' : '');
     textEl.classList.remove('empty-preview');
@@ -222,7 +222,7 @@ function showPreview(data, tabId) {
   }
 
   // Show stats
-  var stats = '';
+  let stats = '';
   if (data.totalChars > 0) {
     stats = data.totalChars.toLocaleString() + ' chars';
   }
@@ -233,18 +233,18 @@ function showPreview(data, tabId) {
 
   // Show preview container, hide button groups
   container.style.display = 'block';
-  var groups = document.querySelectorAll('.button-group');
-  for (var i = 0; i < groups.length; i++) {
+  const groups = document.querySelectorAll('.button-group');
+  for (let i = 0; i < groups.length; i++) {
     groups[i].style.display = 'none';
   }
-  var hint = document.querySelector('.shortcuts-hint');
+  const hint = document.querySelector('.shortcuts-hint');
   if (hint) hint.style.display = 'none';
 
   setButtonsDisabled(false);
 
   // Wire up Download button
-  var dlBtn = document.getElementById('preview-download');
-  var cancelBtn = document.getElementById('preview-cancel');
+  const dlBtn = document.getElementById('preview-download');
+  const cancelBtn = document.getElementById('preview-cancel');
 
   if (dlBtn) {
     dlBtn.onclick = function () {
@@ -281,22 +281,22 @@ function showPreview(data, tabId) {
 }
 
 function resetPreview() {
-  var container = document.getElementById('preview-container');
+  const container = document.getElementById('preview-container');
   if (container) container.style.display = 'none';
 
   // Restore button groups
-  var groups = document.querySelectorAll('.button-group');
-  for (var i = 0; i < groups.length; i++) {
+  const groups = document.querySelectorAll('.button-group');
+  for (let i = 0; i < groups.length; i++) {
     groups[i].style.display = '';
   }
-  var hint = document.querySelector('.shortcuts-hint');
+  const hint = document.querySelector('.shortcuts-hint');
   if (hint) hint.style.display = '';
 
   setButtonsDisabled(false);
 
-  var statusEl = document.getElementById('status-msg');
+  const statusEl = document.getElementById('status-msg');
   if (statusEl) statusEl.style.display = 'none';
 
-  var errEl = document.getElementById('error-msg');
+  const errEl = document.getElementById('error-msg');
   if (errEl) errEl.style.display = 'none';
 }
