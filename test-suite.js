@@ -474,6 +474,35 @@ test('text-extract.js removes nav elements', () => {
   assert(js.includes("'nav'"), 'Must strip nav elements');
 });
 
+const vm = require('vm');
+
+test('text-extract.js removeNonContent actually removes boilerplate elements', () => {
+  const js = fs.readFileSync(path.join(EXT, 'text-extract.js'), 'utf8');
+
+  // Inject export to access the internal function in the IIFE
+  const testJs = js.replace('})();', 'window.removeNonContent = removeNonContent; })();');
+
+  let removedNodes = 0;
+  const window = {};
+
+  // Mock DOM
+  const document = {
+    querySelectorAll: (selector) => {
+      if (selector.includes('nav') || selector.includes('footer')) {
+        return [{ remove: () => { removedNodes++; } }];
+      }
+      return [];
+    }
+  };
+
+  const context = vm.createContext({ window, document });
+  vm.runInContext(testJs, context);
+
+  window.removeNonContent(document);
+
+  assert(removedNodes > 0, 'Must call remove() on boilerplate elements like <nav>');
+});
+
 test('text-extract.js removes hidden elements (aria-hidden)', () => {
   const js = fs.readFileSync(path.join(EXT, 'text-extract.js'), 'utf8');
   assert(js.includes('aria-hidden'), 'Must strip aria-hidden elements');
